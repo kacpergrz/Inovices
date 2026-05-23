@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Faktury</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --border: #d9dde3;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #dc2626;
+      --danger-dark: #b91c1c;
+      --text: #111827;
+      --text-muted: #6b7280;
+      --paid-bg: #dcfce7;
+      --paid-text: #166534;
+      --unpaid-bg: #fef9c3;
+      --unpaid-text: #854d0e;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    header {
+      max-width: 860px;
+      margin: 0 auto 24px;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-top: 2px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      max-width: 860px;
+      margin: 0 auto 20px;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-group label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .form-group input[type="text"] {
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      outline: none;
+      width: 260px;
+      transition: border-color 0.15s;
+    }
+
+    .form-group input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+
+    .form-group input[type="text"].invalid {
+      border-color: var(--danger);
+    }
+
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-track {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: var(--border);
+      border-radius: 999px;
+      transition: background 0.2s;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: var(--primary);
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(18px);
+    }
+
+    .toggle-label {
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--primary-dark); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      font-size: 0.8rem;
+    }
+
+    .btn-danger:hover { background: #fef2f2; border-color: var(--danger); }
+
+    .error-msg {
+      font-size: 0.8rem;
+      color: var(--danger);
+      margin-top: 6px;
+      min-height: 18px;
+    }
+
+    .search-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search-wrap input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      outline: none;
+      flex: 1;
+      max-width: 320px;
+      transition: border-color 0.15s;
+    }
+
+    .search-wrap input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+
+    .stats {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8f9fb; }
+
+    td {
+      padding: 11px 12px;
+      vertical-align: middle;
+    }
+
+    .invoice-num {
+      font-weight: 600;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .date-cell {
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-paid {
+      background: var(--paid-bg);
+      color: var(--paid-text);
+    }
+
+    .badge-unpaid {
+      background: var(--unpaid-bg);
+      color: var(--unpaid-text);
+    }
+
+    .actions { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+
+    .status-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state svg {
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+
+    @media (max-width: 600px) {
+      .form-group input[type="text"] { width: 100%; }
+      .form-row { flex-direction: column; }
+      .search-wrap { flex-direction: column; align-items: stretch; }
+      .search-wrap input { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Faktury</h1>
+  <p>Zarządzaj fakturami i ich statusami opłacenia</p>
+</header>
+
+<div class="card">
+  <h2>Dodaj fakturę</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="invoiceNum">Numer faktury</label>
+      <input type="text" id="invoiceNum" placeholder="np. FV/2024/001" autocomplete="off" />
+    </div>
+
+    <label class="toggle-wrap" for="paidCheck">
+      <span class="toggle">
+        <input type="checkbox" id="paidCheck" />
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </span>
+      <span class="toggle-label">Opłacona</span>
+    </label>
+
+    <button class="btn btn-primary" onclick="addInvoice()">Dodaj</button>
+  </div>
+  <p class="error-msg" id="errorMsg"></p>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:12px; flex-wrap:wrap;">
+    <h2 style="margin:0;">Lista faktur</h2>
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="Szukaj po numerze..." oninput="renderTable()" />
+      <span class="stats" id="stats"></span>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Numer faktury</th>
+          <th>Data dodania</th>
+          <th>Status</th>
+          <th>Akcje</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceList"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <p>Brak faktur do wyświetlenia</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+  const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
+  const SUPABASE_ANON_KEY = 'WKLEJ_TUTAJ_SWÓJ_ANON_KEY';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function loadData() {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function addInvoice() {
+    const input = document.getElementById('invoiceNum');
+    const errorMsg = document.getElementById('errorMsg');
+    const num = input.value.trim();
+
+    if (!num) {
+      input.classList.add('invalid');
+      errorMsg.textContent = 'Numer faktury nie może być pusty.';
+      input.focus();
+      return;
+    }
+
+    input.classList.remove('invalid');
+    errorMsg.textContent = '';
+
+    const allData = await loadData();
+    if (allData.some(f => f.num.toLowerCase() === num.toLowerCase())) {
+      input.classList.add('invalid');
+      errorMsg.textContent = 'Faktura o tym numerze już istnieje.';
+      input.focus();
+      return;
+    }
+
+    const { error } = await supabase.from('invoices').insert({
+      num,
+      paid: document.getElementById('paidCheck').checked,
+      date: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error(error);
+      errorMsg.textContent = 'Nie udało się zapisać faktury.';
+      return;
+    }
+
+    input.value = '';
+    document.getElementById('paidCheck').checked = false;
+    renderTable();
+    input.focus();
+  }
+
+  async function togglePaid(id) {
+    const data = await loadData();
+    const item = data.find(f => f.id === id);
+    if (!item) return;
+
+    const { error } = await supabase
+      .from('invoices')
+      .update({ paid: !item.paid })
+      .eq('id', id);
+
+    if (error) console.error(error);
+    renderTable();
+  }
+
+  async function deleteInvoice(id) {
+    if (!confirm('Czy na pewno chcesz usunąć tę fakturę?')) return;
+
+    const { error } = await supabase
+      .from('invoices')
+      .delete()
+      .eq('id', id);
+
+    if (error) console.error(error);
+    renderTable();
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function renderTable() {
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    const allData = await loadData();
+    const filtered = query ? allData.filter(f => f.num.toLowerCase().includes(query)) : allData;
+
+    const tbody = document.getElementById('invoiceList');
+    const emptyState = document.getElementById('emptyState');
+    const stats = document.getElementById('stats');
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '';
+      emptyState.style.display = 'block';
+    } else {
+      emptyState.style.display = 'none';
+      tbody.innerHTML = filtered.map(f => `
+        <tr>
+          <td class="invoice-num">${escHtml(f.num)}</td>
+          <td class="date-cell">${formatDate(f.date)}</td>
+          <td>
+            <div class="status-toggle">
+              <label class="toggle" title="${f.paid ? 'Oznacz jako nieopłaconą' : 'Oznacz jako opłaconą'}">
+                <input type="checkbox" ${f.paid ? 'checked' : ''} onchange="togglePaid(${f.id})" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+              <span class="badge ${f.paid ? 'badge-paid' : 'badge-unpaid'}">
+                ${f.paid ? 'Opłacona' : 'Nieopłacona'}
+              </span>
+            </div>
+          </td>
+          <td class="actions">
+            <button class="btn btn-danger" onclick="deleteInvoice(${f.id})">Usuń</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    const total = allData.length;
+    const paidCount = allData.filter(f => f.paid).length;
+    stats.textContent = query
+      ? `Wyniki: ${filtered.length} z ${total}`
+      : `Łącznie: ${total} | Opłacone: ${paidCount} | Nieopłacone: ${total - paidCount}`;
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  window.addInvoice = addInvoice;
+  window.togglePaid = togglePaid;
+  window.deleteInvoice = deleteInvoice;
+  window.renderTable = renderTable;
+
+  document.getElementById('invoiceNum').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addInvoice();
+  });
+
+  document.getElementById('invoiceNum').addEventListener('input', () => {
+    document.getElementById('invoiceNum').classList.remove('invalid');
+    document.getElementById('errorMsg').textContent = '';
+  });
+
+  renderTable();
+</script>
+
+</body>
+</html>
