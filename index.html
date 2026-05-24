@@ -480,26 +480,26 @@
     } else {
       emptyState.style.display = 'none';
       tbody.innerHTML = filtered.map(f => `
-        <tr>
-          <td class="invoice-num">${escHtml(f.num)}</td>
-          <td class="date-cell">${formatDate(f.date)}</td>
-          <td>
-            <div class="status-toggle">
-              <label class="toggle" title="${f.paid ? 'Oznacz jako nieopłaconą' : 'Oznacz jako opłaconą'}">
-                <input type="checkbox" ${f.paid ? 'checked' : ''} onchange="togglePaid(${f.id})" />
-                <span class="toggle-track"></span>
-                <span class="toggle-thumb"></span>
-              </label>
-              <span class="badge ${f.paid ? 'badge-paid' : 'badge-unpaid'}">
-                ${f.paid ? 'Opłacona' : 'Nieopłacona'}
-              </span>
-            </div>
-          </td>
-          <td class="actions">
-            <button class="btn btn-danger" onclick="deleteInvoice(${f.id})">Usuń</button>
-          </td>
-        </tr>
-      `).join('');
+  <tr>
+    <td class="invoice-num">${escHtml(f.num)}</td>
+    <td class="date-cell">${formatDate(f.date)}</td>
+    <td>
+      <div class="status-toggle">
+        <label class="toggle" title="${f.paid ? 'Oznacz jako nieopłaconą' : 'Oznacz jako opłaconą'}">
+          <input type="checkbox" ${f.paid ? 'checked' : ''} onchange="togglePaid('${f.id}')" />
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+        <span class="badge ${f.paid ? 'badge-paid' : 'badge-unpaid'}">
+          ${f.paid ? 'Opłacona' : 'Nieopłacona'}
+        </span>
+      </div>
+    </td>
+    <td class="actions">
+      <button class="btn btn-danger" onclick="deleteInvoice('${f.id}')">Usuń</button>
+    </td>
+  </tr>
+`).join('');
     }
 
     const total = allData.length;
