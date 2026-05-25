@@ -40,12 +40,10 @@
       --color-success-highlight: #d4dfcc;
       --color-error: #a12c7b;
       --color-error-highlight: #e0ced7;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
-      --radius-sm: 0.375rem;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
       --radius-md: 0.5rem;
       --radius-lg: 0.75rem;
       --radius-xl: 1rem;
-      --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
       --font-body: "Satoshi", Inter, sans-serif;
     }
 
@@ -65,7 +63,6 @@
       --color-success-highlight: #3a4435;
       --color-error: #d163a7;
       --color-error-highlight: #4c3d46;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -80,26 +77,12 @@
       padding: var(--space-6);
     }
 
-
-    button, input {
-      font: inherit;
-      color: inherit;
-    }
-
-    button {
-      cursor: pointer;
-      border: none;
-      background: none;
-      transition: background var(--transition-interactive), color var(--transition-interactive), border-color var(--transition-interactive);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: none; background: none; }
+    table { width: 100%; border-collapse: collapse; }
 
     .app {
-      max-width: 1180px;
+      max-width: 1200px;
       margin: 0 auto;
       display: grid;
       gap: var(--space-6);
@@ -144,12 +127,6 @@
       font-size: var(--text-sm);
     }
 
-    .toolbar {
-      display: flex;
-      gap: var(--space-3);
-      flex-wrap: wrap;
-    }
-
     .theme-toggle,
     .ghost-btn,
     .primary-btn,
@@ -170,7 +147,7 @@
 
     .primary-btn {
       background: var(--color-primary);
-      color: white;
+      color: #fff;
       font-weight: 700;
     }
 
@@ -178,17 +155,13 @@
     .theme-toggle:hover,
     .ghost-btn:hover,
     .small-btn:hover,
-    .danger-btn:hover {
-      background: var(--color-surface-offset);
-    }
+    .danger-btn:hover { background: var(--color-surface-offset); }
 
-    .danger-btn {
-      color: var(--color-error);
-    }
+    .danger-btn { color: var(--color-error); }
 
     .layout {
       display: grid;
-      grid-template-columns: 360px 1fr;
+      grid-template-columns: 380px 1fr;
       gap: var(--space-6);
       align-items: start;
     }
@@ -302,9 +275,7 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .table-wrap {
-      overflow-x: auto;
-    }
+    .table-wrap { overflow-x: auto; }
 
     th, td {
       text-align: left;
@@ -324,9 +295,7 @@
       background: color-mix(in oklab, var(--color-primary) 4%, var(--color-surface));
     }
 
-    .invoice-num {
-      font-weight: 700;
-    }
+    .invoice-num { font-weight: 700; }
 
     .badge {
       display: inline-flex;
@@ -353,7 +322,6 @@
       color: var(--color-text-muted);
     }
 
-    .row-actions,
     .actions,
     .status-toggle {
       display: flex;
@@ -381,7 +349,7 @@
       inset: 0;
       background: var(--color-border);
       border-radius: 999px;
-      transition: background var(--transition-interactive);
+      transition: 0.2s;
     }
 
     .toggle-thumb {
@@ -392,7 +360,7 @@
       height: 20px;
       border-radius: 50%;
       background: #fff;
-      transition: transform var(--transition-interactive);
+      transition: 0.2s;
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
 
@@ -410,28 +378,15 @@
       color: var(--color-text-muted);
     }
 
-    @media (max-width: 900px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-
-      .stats {
-        grid-template-columns: 1fr;
-      }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 640px) {
-      body {
-        padding: var(--space-4);
-      }
-
-      .searchbar {
-        align-items: stretch;
-      }
-
-      .searchbar input {
-        width: 100%;
-      }
+      body { padding: var(--space-4); }
+      .searchbar { align-items: stretch; }
+      .searchbar input { width: 100%; }
     }
   </style>
 </head>
@@ -447,20 +402,18 @@
         </svg>
         <div>
           <h1>Panel faktur</h1>
-          <p class="muted">Dodawaj faktury, liczbę dni na płatność i automatyczny termin.</p>
+          <p class="muted">Dodawanie, edycja, usuwanie i automatyczne liczenie terminu płatności.</p>
         </div>
       </div>
 
-      <div class="toolbar">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Przełącz motyw">Motyw</button>
-      </div>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Przełącz motyw">Motyw</button>
     </header>
 
     <main class="layout">
-      <section class="panel" aria-labelledby="formTitle">
+      <section class="panel">
         <div class="panel-header">
-          <h2 id="formTitle">Dodaj fakturę</h2>
-          <p class="muted">Wpisujesz datę wystawienia i liczbę dni, a termin liczy się sam.</p>
+          <h2>Formularz faktury</h2>
+          <p class="muted">Podaj dane, a termin płatności policzy się automatycznie.</p>
         </div>
 
         <div class="panel-body">
@@ -470,7 +423,7 @@
 
           <div class="field">
             <label for="invoiceNum">Numer faktury</label>
-            <input id="invoiceNum" type="text" placeholder="np. FV/05/2026/123" autocomplete="off" />
+            <input id="invoiceNum" type="text" placeholder="np. 12/2026" autocomplete="off" />
           </div>
 
           <div class="field">
@@ -485,39 +438,37 @@
 
           <div class="field">
             <label for="calculatedDueDate">Wyliczony termin płatności</label>
-            <input id="calculatedDueDate" type="text" placeholder="Termin pojawi się automatycznie" readonly />
+            <input id="calculatedDueDate" type="text" readonly placeholder="Termin wyliczy się automatycznie" />
           </div>
 
-          <div class="field">
-            <label class="check-row" for="paidCheck">
-              <input id="paidCheck" type="checkbox" />
-              <span>Faktura została opłacona</span>
-            </label>
-          </div>
+          <label class="check-row" for="paidCheck">
+            <input id="paidCheck" type="checkbox" />
+            <span>Faktura opłacona</span>
+          </label>
 
           <div style="display:flex; gap: var(--space-3); flex-wrap: wrap;">
-            <button class="primary-btn" type="button" onclick="addInvoice()">Dodaj fakturę</button>
-            <button class="ghost-btn" type="button" onclick="clearForm()">Wyczyść formularz</button>
+            <button id="submitBtn" class="primary-btn" type="button">Dodaj fakturę</button>
+            <button class="ghost-btn" type="button" onclick="clearForm()">Wyczyść</button>
           </div>
 
-          <p class="error-msg" id="errorMsg"></p>
-          <p class="helper">Do działania potrzebujesz tabeli `invoices` z kolumnami `id`, `num`, `paid`, `date`, `issue_date`, `payment_days`, `due_date` [web:46].</p>
+          <p id="errorMsg" class="error-msg"></p>
+          <p class="helper">Tabela `invoices` powinna mieć kolumny: `id`, `num`, `paid`, `date`, `issue_date`, `payment_days`, `due_date` [web:46].</p>
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="listTitle">
+      <section class="panel">
         <div class="panel-header">
           <div class="searchbar">
             <div>
-              <h2 id="listTitle">Lista faktur</h2>
-              <p class="muted">Podgląd wszystkich dodanych pozycji.</p>
+              <h2>Lista faktur</h2>
+              <p class="muted">Sortowanie rosnąco po dacie wystawienia.</p>
             </div>
-            <input id="searchInput" type="search" placeholder="Szukaj po numerze faktury" aria-label="Szukaj po numerze faktury" />
+            <input id="searchInput" type="search" placeholder="Szukaj po numerze faktury" />
           </div>
         </div>
 
         <div class="panel-body">
-          <div class="stats" aria-label="Podsumowanie faktur">
+          <div class="stats">
             <article class="stat-card">
               <span class="muted">Wszystkie</span>
               <strong id="totalCount">0</strong>
@@ -536,8 +487,8 @@
             <table>
               <thead>
                 <tr>
-                  <th>Numer faktury</th>
-                  <th>Data dodania</th>
+                  <th>Numer</th>
+                  <th>Dodano</th>
                   <th>Data wystawienia</th>
                   <th>Dni</th>
                   <th>Termin płatności</th>
@@ -561,9 +512,8 @@
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-
-  const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w';
+    const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w';
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const invoiceNum = document.getElementById('invoiceNum');
@@ -578,7 +528,11 @@
     const totalCount = document.getElementById('totalCount');
     const paidCount = document.getElementById('paidCount');
     const unpaidCount = document.getElementById('unpaidCount');
+    const submitBtn = document.getElementById('submitBtn');
     const themeToggle = document.querySelector('[data-theme-toggle]');
+
+    let editingId = null;
+    let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
     function setTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
@@ -586,7 +540,6 @@
       themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw');
     }
 
-    let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     setTheme(currentTheme);
 
     themeToggle.addEventListener('click', () => {
@@ -605,7 +558,6 @@
 
     function formatDateTime(value) {
       if (!value) return '<span class="muted">Brak</span>';
-
       const d = new Date(value);
       if (Number.isNaN(d.getTime())) return escHtml(value);
 
@@ -621,10 +573,8 @@
 
     function formatDateOnly(value) {
       if (!value) return '<span class="muted">Brak</span>';
-
       const [year, month, day] = value.split('-');
       if (!year || !month || !day) return escHtml(value);
-
       return `${day}.${month}.${year}`;
     }
 
@@ -656,7 +606,6 @@
       if (diffDays === 1) return { text: 'Jutro', className: 'paid' };
       if (diffDays === 0) return { text: 'Dzisiaj', className: 'unpaid' };
       if (diffDays === -1) return { text: '1 dzień po terminie', className: 'unpaid' };
-
       return { text: `${Math.abs(diffDays)} dni po terminie`, className: 'unpaid' };
     }
 
@@ -712,26 +661,45 @@
       errorMsg.textContent = '';
 
       const allData = await loadData();
-      if (allData.some(f => String(f.num).toLowerCase() === num.toLowerCase())) {
+      const duplicate = allData.find(f =>
+        String(f.num).toLowerCase() === num.toLowerCase() && f.id !== editingId
+      );
+
+      if (duplicate) {
         invoiceNum.classList.add('invalid');
         errorMsg.textContent = 'Faktura o tym numerze już istnieje.';
         invoiceNum.focus();
         return;
       }
 
-      const { error } = await supabase
-        .from('invoices')
-        .insert({
-          num,
-          paid: paidCheck.checked,
-          date: new Date().toISOString(),
-          issue_date: issueDateValue,
-          payment_days: parsedPaymentDays,
-          due_date: dueDate
-        });
+      const payload = {
+        num,
+        paid: paidCheck.checked,
+        date: new Date().toISOString(),
+        issue_date: issueDateValue,
+        payment_days: parsedPaymentDays,
+        due_date: dueDate
+      };
+
+      let error;
+
+      if (editingId) {
+        const result = await supabase
+          .from('invoices')
+          .update(payload)
+          .eq('id', editingId);
+
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from('invoices')
+          .insert(payload);
+
+        error = result.error;
+      }
 
       if (error) {
-        console.error('addInvoice error:', error);
+        console.error('save error:', error);
         errorMsg.textContent = error.message || 'Nie udało się zapisać faktury.';
         return;
       }
@@ -739,6 +707,24 @@
       clearForm();
       await renderTable();
       invoiceNum.focus();
+    }
+
+    async function editInvoice(id) {
+      const data = await loadData();
+      const item = data.find(f => f.id === id);
+      if (!item) return;
+
+      editingId = item.id;
+      invoiceNum.value = item.num || '';
+      issueDate.value = item.issue_date || '';
+      paymentDays.value = item.payment_days ?? '';
+      paidCheck.checked = !!item.paid;
+      updateCalculatedDueDate();
+
+      submitBtn.textContent = 'Zapisz zmiany';
+      errorMsg.textContent = 'Edytujesz fakturę. Po zmianach kliknij „Zapisz zmiany”.';
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     async function togglePaid(id) {
@@ -774,10 +760,15 @@
         return;
       }
 
+      if (editingId === id) {
+        clearForm();
+      }
+
       renderTable();
     }
 
     function clearForm() {
+      editingId = null;
       invoiceNum.value = '';
       issueDate.value = '';
       paymentDays.value = '';
@@ -785,6 +776,7 @@
       paidCheck.checked = false;
       errorMsg.textContent = '';
       invoiceNum.classList.remove('invalid');
+      submitBtn.textContent = 'Dodaj fakturę';
     }
 
     async function renderTable() {
@@ -830,6 +822,7 @@
               </div>
             </td>
             <td class="actions">
+              <button class="small-btn" onclick="editInvoice('${f.id}')">Edytuj</button>
               <button class="danger-btn" onclick="deleteInvoice('${f.id}')">Usuń</button>
             </td>
           </tr>
@@ -842,15 +835,13 @@
       errorMsg.textContent = '';
     });
 
-    invoiceNum.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addInvoice();
-    });
-
+    submitBtn.addEventListener('click', addInvoice);
     searchInput.addEventListener('input', renderTable);
 
     window.addInvoice = addInvoice;
-    window.deleteInvoice = deleteInvoice;
+    window.editInvoice = editInvoice;
     window.togglePaid = togglePaid;
+    window.deleteInvoice = deleteInvoice;
     window.clearForm = clearForm;
 
     renderTable();
