@@ -672,7 +672,7 @@
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
-        .order('date', { ascending: false });
+        .order('issue_date', { ascending: true });
 
       if (error) {
         console.error('loadData error:', error);
