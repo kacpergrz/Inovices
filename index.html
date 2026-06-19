@@ -82,7 +82,7 @@
     table { width: 100%; border-collapse: collapse; }
 
     .app {
-      max-width: 1200px;
+      max-width: 1320px;
       margin: 0 auto;
       display: grid;
       gap: var(--space-6);
@@ -131,7 +131,8 @@
     .ghost-btn,
     .primary-btn,
     .small-btn,
-    .danger-btn {
+    .danger-btn,
+    .pdf-btn {
       min-height: 44px;
       padding: 0 var(--space-4);
       border-radius: var(--radius-md);
@@ -140,7 +141,8 @@
     .theme-toggle,
     .ghost-btn,
     .small-btn,
-    .danger-btn {
+    .danger-btn,
+    .pdf-btn {
       border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
       background: var(--color-surface-2);
     }
@@ -152,16 +154,20 @@
     }
 
     .primary-btn:hover { background: var(--color-primary-hover); }
+
     .theme-toggle:hover,
     .ghost-btn:hover,
     .small-btn:hover,
-    .danger-btn:hover { background: var(--color-surface-offset); }
+    .danger-btn:hover,
+    .pdf-btn:hover {
+      background: var(--color-surface-offset);
+    }
 
     .danger-btn { color: var(--color-error); }
 
     .layout {
       display: grid;
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 400px 1fr;
       gap: var(--space-6);
       align-items: start;
     }
@@ -199,6 +205,7 @@
     .field input[type="text"],
     .field input[type="date"],
     .field input[type="number"],
+    .field input[type="file"],
     .searchbar input {
       min-height: 48px;
       padding: 0 var(--space-4);
@@ -206,6 +213,12 @@
       background: var(--color-surface-2);
       border-radius: var(--radius-md);
       outline: none;
+      width: 100%;
+    }
+
+    .field input[type="file"] {
+      padding: var(--space-3);
+      min-height: auto;
     }
 
     .field input:focus,
@@ -378,6 +391,19 @@
       color: var(--color-text-muted);
     }
 
+    .file-meta {
+      display: grid;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-surface-2);
+      border-radius: var(--radius-md);
+      border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
+    }
+
+    .file-meta strong {
+      font-size: var(--text-sm);
+    }
+
     @media (max-width: 980px) {
       .layout { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
@@ -401,8 +427,8 @@
           <path d="M20 44H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
         </svg>
         <div>
-          <h1>Panel faktur</h1>
-          <p class="muted">Dodawanie, edycja, usuwanie i automatyczne liczenie terminu płatności.</p>
+          <h1>Panel faktur i zleceń PDF</h1>
+          <p class="muted">Dodawanie, edycja, usuwanie, termin płatności i podgląd załączonego PDF.</p>
         </div>
       </div>
 
@@ -413,12 +439,12 @@
       <section class="panel">
         <div class="panel-header">
           <h2>Formularz faktury</h2>
-          <p class="muted">Podaj dane, a termin płatności policzy się automatycznie.</p>
+          <p class="muted">Możesz dodać dane faktury oraz plik zlecenia w PDF.</p>
         </div>
 
         <div class="panel-body">
           <div class="inline-note">
-            Przykład: data wystawienia 2026-05-24 + 45 dni = automatyczny termin płatności [web:272][web:280].
+            Termin płatności liczy się automatycznie z daty wystawienia i liczby dni, a PDF zapisuje się do Supabase Storage. [web:1]
           </div>
 
           <div class="field">
@@ -441,6 +467,17 @@
             <input id="calculatedDueDate" type="text" readonly placeholder="Termin wyliczy się automatycznie" />
           </div>
 
+          <div class="field">
+            <label for="jobPdf">Zlecenie w PDF</label>
+            <input id="jobPdf" type="file" accept="application/pdf,.pdf" />
+            <p class="helper">Wybierz plik PDF. Zostanie zapisany w Supabase Storage. [web:1]</p>
+          </div>
+
+          <div id="currentPdfInfo" class="file-meta" style="display:none;">
+            <strong>Aktualnie przypięty PDF</strong>
+            <span id="currentPdfName" class="muted"></span>
+          </div>
+
           <label class="check-row" for="paidCheck">
             <input id="paidCheck" type="checkbox" />
             <span>Faktura opłacona</span>
@@ -452,7 +489,9 @@
           </div>
 
           <p id="errorMsg" class="error-msg"></p>
-          <p class="helper">Tabela `invoices` powinna mieć kolumny: `id`, `num`, `paid`, `date`, `issue_date`, `payment_days`, `due_date` [web:46].</p>
+          <p class="helper">
+            Tabela `invoices` powinna mieć kolumny: `id`, `num`, `paid`, `date`, `issue_date`, `payment_days`, `due_date`, `pdf_name`, `pdf_path`.
+          </p>
         </div>
       </section>
 
@@ -461,7 +500,7 @@
           <div class="searchbar">
             <div>
               <h2>Lista faktur</h2>
-              <p class="muted">Sortowanie rosnąco po dacie wystawienia.</p>
+              <p class="muted">Kliknij „Podgląd PDF”, aby otworzyć zlecenie w nowej karcie przez signed URL. [web:2]</p>
             </div>
             <input id="searchInput" type="search" placeholder="Szukaj po numerze faktury" />
           </div>
@@ -493,6 +532,7 @@
                   <th>Dni</th>
                   <th>Termin płatności</th>
                   <th>Pozostało</th>
+                  <th>PDF</th>
                   <th>Status</th>
                   <th>Akcje</th>
                 </tr>
@@ -514,12 +554,17 @@
 
     const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w';
+    const STORAGE_BUCKET = 'invoice-files';
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const invoiceNum = document.getElementById('invoiceNum');
     const issueDate = document.getElementById('issueDate');
     const paymentDays = document.getElementById('paymentDays');
     const calculatedDueDate = document.getElementById('calculatedDueDate');
+    const jobPdf = document.getElementById('jobPdf');
+    const currentPdfInfo = document.getElementById('currentPdfInfo');
+    const currentPdfName = document.getElementById('currentPdfName');
     const paidCheck = document.getElementById('paidCheck');
     const searchInput = document.getElementById('searchInput');
     const errorMsg = document.getElementById('errorMsg');
@@ -532,6 +577,8 @@
     const themeToggle = document.querySelector('[data-theme-toggle]');
 
     let editingId = null;
+    let editingPdfPath = null;
+    let editingPdfName = null;
     let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
     function setTheme(theme) {
@@ -614,6 +661,23 @@
       calculatedDueDate.value = dueDate ? formatDateOnly(dueDate).replace(/<[^>]*>/g, '') : '';
     }
 
+    function normalizeFileName(name) {
+      return String(name || 'plik.pdf')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+    }
+
+    function updateCurrentPdfBox() {
+      if (editingPdfPath && editingPdfName) {
+        currentPdfInfo.style.display = 'grid';
+        currentPdfName.textContent = editingPdfName;
+      } else {
+        currentPdfInfo.style.display = 'none';
+        currentPdfName.textContent = '';
+      }
+    }
+
     issueDate.addEventListener('input', updateCalculatedDueDate);
     paymentDays.addEventListener('input', updateCalculatedDueDate);
 
@@ -629,6 +693,55 @@
       }
 
       return data || [];
+    }
+
+    async function uploadPdfIfNeeded() {
+      const file = jobPdf.files?.[0];
+
+      if (!file) {
+        return {
+          pdf_path: editingPdfPath,
+          pdf_name: editingPdfName
+        };
+      }
+
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        throw new Error('Możesz dodać tylko plik PDF.');
+      }
+
+      const safeName = normalizeFileName(file.name);
+      const uniquePath = `orders/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+
+      const { error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(uniquePath, file, {
+          upsert: false,
+          contentType: 'application/pdf'
+        });
+
+      if (error) {
+        throw new Error(error.message || 'Nie udało się wysłać pliku PDF.');
+      }
+
+      return {
+        pdf_path: uniquePath,
+        pdf_name: file.name
+      };
+    }
+
+    async function openPdfPreview(path) {
+      if (!path) return;
+
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(path, 300);
+
+      if (error || !data?.signedUrl) {
+        alert(error?.message || 'Nie udało się otworzyć podglądu PDF.');
+        return;
+      }
+
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     }
 
     async function addInvoice() {
@@ -672,13 +785,24 @@
         return;
       }
 
+      let pdfData = { pdf_path: editingPdfPath, pdf_name: editingPdfName };
+
+      try {
+        pdfData = await uploadPdfIfNeeded();
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Błąd podczas dodawania PDF.';
+        return;
+      }
+
       const payload = {
         num,
         paid: paidCheck.checked,
         date: new Date().toISOString(),
         issue_date: issueDateValue,
         payment_days: parsedPaymentDays,
-        due_date: dueDate
+        due_date: dueDate,
+        pdf_path: pdfData.pdf_path,
+        pdf_name: pdfData.pdf_name
       };
 
       let error;
@@ -715,14 +839,19 @@
       if (!item) return;
 
       editingId = item.id;
+      editingPdfPath = item.pdf_path || null;
+      editingPdfName = item.pdf_name || null;
+
       invoiceNum.value = item.num || '';
       issueDate.value = item.issue_date || '';
       paymentDays.value = item.payment_days ?? '';
       paidCheck.checked = !!item.paid;
+      jobPdf.value = '';
       updateCalculatedDueDate();
+      updateCurrentPdfBox();
 
       submitBtn.textContent = 'Zapisz zmiany';
-      errorMsg.textContent = 'Edytujesz fakturę. Po zmianach kliknij „Zapisz zmiany”.';
+      errorMsg.textContent = 'Edytujesz fakturę. Możesz zostawić obecny PDF albo wgrać nowy.';
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -749,6 +878,9 @@
     async function deleteInvoice(id) {
       if (!confirm('Czy na pewno chcesz usunąć tę fakturę?')) return;
 
+      const data = await loadData();
+      const item = data.find(f => f.id === id);
+
       const { error } = await supabase
         .from('invoices')
         .delete()
@@ -760,6 +892,12 @@
         return;
       }
 
+      if (item?.pdf_path) {
+        await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([item.pdf_path]);
+      }
+
       if (editingId === id) {
         clearForm();
       }
@@ -769,14 +907,18 @@
 
     function clearForm() {
       editingId = null;
+      editingPdfPath = null;
+      editingPdfName = null;
       invoiceNum.value = '';
       issueDate.value = '';
       paymentDays.value = '';
       calculatedDueDate.value = '';
+      jobPdf.value = '';
       paidCheck.checked = false;
       errorMsg.textContent = '';
       invoiceNum.classList.remove('invalid');
       submitBtn.textContent = 'Dodaj fakturę';
+      updateCurrentPdfBox();
     }
 
     async function renderTable() {
@@ -809,6 +951,12 @@
             <td>${f.payment_days ?? '<span class="muted">Brak</span>'}</td>
             <td>${formatDateOnly(f.due_date)}</td>
             <td><span class="badge ${dueInfo.className}">${dueInfo.text}</span></td>
+            <td>
+              ${f.pdf_path
+                ? `<button class="pdf-btn" onclick="openPdfPreview('${String(f.pdf_path).replaceAll("'", "\\'")}')">Podgląd PDF</button>`
+                : `<span class="badge neutral">Brak PDF</span>`
+              }
+            </td>
             <td>
               <div class="status-toggle">
                 <label class="toggle" title="${f.paid ? 'Oznacz jako nieopłaconą' : 'Oznacz jako opłaconą'}">
@@ -843,6 +991,7 @@
     window.togglePaid = togglePaid;
     window.deleteInvoice = deleteInvoice;
     window.clearForm = clearForm;
+    window.openPdfPreview = openPdfPreview;
 
     renderTable();
   </script>
