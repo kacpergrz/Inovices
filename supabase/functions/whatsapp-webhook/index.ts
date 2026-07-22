@@ -10,7 +10,10 @@ type CommandResult = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("APP_SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("APP_SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+  Deno.env.get("APP_SUPABASE_SERVICE_ROLE_KEY")!;
+
 const WHATSAPP_VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN")!;
 const WHATSAPP_WEBHOOK_SECRET = Deno.env.get("WHATSAPP_WEBHOOK_SECRET") || "";
 const ALLOWED_WHATSAPP_SENDERS = (Deno.env.get("ALLOWED_WHATSAPP_SENDERS") || "")
@@ -18,7 +21,7 @@ const ALLOWED_WHATSAPP_SENDERS = (Deno.env.get("ALLOWED_WHATSAPP_SENDERS") || ""
   .map((x) => normalizePhone(x))
   .filter(Boolean);
 
-const supabase = createClient(SUPABASE_URL, APP_SUPABASE_SERVICE_ROLE_KEY, {
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
