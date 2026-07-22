@@ -1,0 +1,4 @@
+project_id = "https://ncjttizrnukovuotrowp.supabase.co"
+
+[functions.whatsapp-webhook]
+verify_jwt = false
