@@ -9,115 +9,138 @@ type CommandResult = {
   errorText?: string;
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("APP_SUPABASE_URL")!;
+const SUPABASE_URL =
+  Deno.env.get("SUPABASE_URL") ?? Deno.env.get("APP_SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-  Deno.env.get("APP_SUPABASE_SERVICE_ROLE_KEY")!;
+  Deno.env.get("APP_SUPABASE_SERVICE_ROLE_KEY") ??
+  "";
 
-const WHATSAPP_VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN")!;
-const WHATSAPP_WEBHOOK_SECRET = Deno.env.get("WHATSAPP_WEBHOOK_SECRET") || "";
-const ALLOWED_WHATSAPP_SENDERS = (Deno.env.get("ALLOWED_WHATSAPP_SENDERS") || "")
+const WHATSAPP_VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN") ?? "";
+const WHATSAPP_WEBHOOK_SECRET = Deno.env.get("WHATSAPP_WEBHOOK_SECRET") ?? "";
+const ALLOWED_WHATSAPP_SENDERS = (Deno.env.get("ALLOWED_WHATSAPP_SENDERS") ?? "")
   .split(",")
   .map((x) => normalizePhone(x))
   .filter(Boolean);
+
+if (!SUPABASE_URL) {
+  throw new Error("Missing SUPABASE_URL");
+}
+
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+}
+
+if (!WHATSAPP_VERIFY_TOKEN) {
+  throw new Error("Missing WHATSAPP_VERIFY_TOKEN");
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
 Deno.serve(async (req) => {
-  if (req.method === "GET") {
-    return handleVerification(req);
-  }
-
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
-  }
-
-  const rawBody = await req.text();
-
-  if (WHATSAPP_WEBHOOK_SECRET) {
-    const signature = req.headers.get("x-hub-signature-256");
-    const valid = await verifyMetaSignature(
-      rawBody,
-      signature,
-      WHATSAPP_WEBHOOK_SECRET,
-    );
-
-    if (!valid) {
-      return jsonResponse({ error: "Invalid webhook signature" }, 401);
-    }
-  }
-
-  let payload: any;
   try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return jsonResponse({ error: "Invalid JSON payload" }, 400);
-  }
+    if (req.method === "GET") {
+      return handleVerification(req);
+    }
 
-  const msg = extractIncomingMessage(payload);
+    if (req.method !== "POST") {
+      return jsonResponse({ error: "Method not allowed" }, 405);
+    }
 
-  if (!msg) {
-    await logCommand({
-      sender_phone: "unknown",
-      message_text: null,
-      command_type: "IGNORED",
-      parsed_invoice_number: null,
-      parsed_value: null,
-      success: true,
-      response_text: "Webhook odebrany, ale brak wiadomości do przetworzenia.",
-      error_text: null,
-      raw_payload: payload,
-    });
+    const rawBody = await req.text();
 
-    return jsonResponse({ ok: true, message: "No message event to process." }, 200);
-  }
+    if (WHATSAPP_WEBHOOK_SECRET) {
+      const signature = req.headers.get("x-hub-signature-256");
+      const valid = await verifyMetaSignature(
+        rawBody,
+        signature,
+        WHATSAPP_WEBHOOK_SECRET,
+      );
 
-  const senderPhone = normalizePhone(msg.from);
-  const messageText = (msg.text || "").trim();
+      if (!valid) {
+        return jsonResponse({ error: "Invalid webhook signature" }, 401);
+      }
+    }
 
-  if (!ALLOWED_WHATSAPP_SENDERS.includes(senderPhone)) {
-    const responseText = "Brak uprawnień do wykonywania zmian z tego numeru.";
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return jsonResponse({ error: "Invalid JSON payload" }, 400);
+    }
+
+    const msg = extractIncomingMessage(payload);
+
+    if (!msg) {
+      await logCommand({
+        sender_phone: "unknown",
+        message_text: null,
+        command_type: "IGNORED",
+        parsed_invoice_number: null,
+        parsed_value: null,
+        success: true,
+        response_text: "Webhook odebrany, ale brak wiadomości do przetworzenia.",
+        error_text: null,
+        raw_payload: payload,
+      });
+
+      return jsonResponse({ ok: true, message: "No message event to process." }, 200);
+    }
+
+    const senderPhone = normalizePhone(msg.from);
+    const messageText = (msg.text || "").trim();
+
+    if (
+      ALLOWED_WHATSAPP_SENDERS.length > 0 &&
+      !ALLOWED_WHATSAPP_SENDERS.includes(senderPhone)
+    ) {
+      const responseText = "Brak uprawnień do wykonywania zmian z tego numeru.";
+
+      await logCommand({
+        sender_phone: senderPhone,
+        message_text: messageText,
+        command_type: "UNAUTHORIZED",
+        parsed_invoice_number: null,
+        parsed_value: null,
+        success: false,
+        response_text: responseText,
+        error_text: "Sender phone not allowed",
+        raw_payload: payload,
+      });
+
+      return jsonResponse({ ok: false, message: responseText }, 403);
+    }
+
+    const result = await processCommand(messageText);
 
     await logCommand({
       sender_phone: senderPhone,
       message_text: messageText,
-      command_type: "UNAUTHORIZED",
-      parsed_invoice_number: null,
-      parsed_value: null,
-      success: false,
-      response_text: responseText,
-      error_text: "Sender phone not allowed",
+      command_type: result.commandType,
+      parsed_invoice_number: result.invoiceNumber ?? null,
+      parsed_value: result.parsedValue ?? null,
+      success: result.ok,
+      response_text: result.responseText,
+      error_text: result.errorText ?? null,
       raw_payload: payload,
     });
 
-    return jsonResponse({ ok: false, message: responseText }, 403);
+    return jsonResponse(
+      {
+        ok: result.ok,
+        message: result.responseText,
+        commandType: result.commandType,
+        invoiceNumber: result.invoiceNumber ?? null,
+      },
+      result.ok ? 200 : 400,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown server error";
+    console.error("Webhook error:", message);
+    return jsonResponse({ error: message }, 500);
   }
-
-  const result = await processCommand(messageText);
-
-  await logCommand({
-    sender_phone: senderPhone,
-    message_text: messageText,
-    command_type: result.commandType,
-    parsed_invoice_number: result.invoiceNumber ?? null,
-    parsed_value: result.parsedValue ?? null,
-    success: result.ok,
-    response_text: result.responseText,
-    error_text: result.errorText ?? null,
-    raw_payload: payload,
-  });
-
-  return jsonResponse(
-    {
-      ok: result.ok,
-      message: result.responseText,
-      commandType: result.commandType,
-      invoiceNumber: result.invoiceNumber ?? null,
-    },
-    result.ok ? 200 : 400,
-  );
 });
 
 function normalizePhone(phone: string | null | undefined): string {
@@ -131,7 +154,10 @@ async function handleVerification(req: Request): Promise<Response> {
   const challenge = url.searchParams.get("hub.challenge");
 
   if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN && challenge) {
-    return new Response(challenge, { status: 200 });
+    return new Response(challenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 
   return new Response("Verification failed", { status: 403 });
@@ -179,7 +205,7 @@ async function processCommand(input: string): Promise<CommandResult> {
         updated_at: new Date().toISOString(),
       })
       .eq("num", invoiceNumber)
-      .select("id,num,due_date")
+      .select("id, num, due_date")
       .limit(1);
 
     if (error) {
@@ -237,7 +263,7 @@ async function processCommand(input: string): Promise<CommandResult> {
         updated_at: new Date().toISOString(),
       })
       .eq("num", invoiceNumber)
-      .select("id,num,paid")
+      .select("id, num, paid")
       .limit(1);
 
     if (error) {
@@ -334,6 +360,7 @@ async function verifyMetaSignature(
   if (!signatureHeader?.startsWith("sha256=")) return false;
 
   const expectedHex = signatureHeader.slice(7);
+
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(appSecret),
