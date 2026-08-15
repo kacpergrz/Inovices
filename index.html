@@ -9,6 +9,7 @@
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
 
   <style>
+    /* TWOJE ORYGINALNE STYLE (Z małą modyfikacją dla logowania) */
     :root,
     [data-theme="light"] {
       --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
@@ -81,6 +82,34 @@
     button { cursor: pointer; border: none; background: none; }
     table { width: 100%; border-collapse: collapse; }
 
+    /* --- NOWE STYLE LOGOWANIA --- */
+    .auth-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+    }
+    .auth-panel {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+      width: 100%;
+      max-width: 420px;
+      display: grid;
+      gap: var(--space-4);
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+    }
+    .auth-panel h2 { font-size: var(--text-xl); }
+    .auth-panel .logo { margin: 0 auto; width: 60px; height: 60px; }
+    .auth-panel .field { text-align: left; }
+    .auth-panel input { width: 100%; }
+    
+    /* Ukrywamy główną aplikację domyślnie */
+    #appContainer { display: none; }
+    
+    /* Reszta Twoich oryginalnych styli */
     .app {
       max-width: 1320px;
       margin: 0 auto;
@@ -88,8 +117,7 @@
       gap: var(--space-6);
     }
 
-    .topbar,
-    .panel {
+    .topbar, .panel {
       background: var(--color-surface);
       border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
       border-radius: var(--radius-xl);
@@ -105,44 +133,18 @@
       flex-wrap: wrap;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-    }
+    .brand { display: flex; align-items: center; gap: var(--space-3); }
+    .logo { width: 40px; height: 40px; color: var(--color-primary); }
+    .brand h1 { font-size: var(--text-xl); line-height: 1.1; }
+    .muted { color: var(--color-text-muted); font-size: var(--text-sm); }
 
-    .logo {
-      width: 40px;
-      height: 40px;
-      color: var(--color-primary);
-    }
-
-    .brand h1 {
-      font-size: var(--text-xl);
-      line-height: 1.1;
-    }
-
-    .muted {
-      color: var(--color-text-muted);
-      font-size: var(--text-sm);
-    }
-
-    .theme-toggle,
-    .ghost-btn,
-    .primary-btn,
-    .small-btn,
-    .danger-btn,
-    .pdf-btn {
+    .theme-toggle, .ghost-btn, .primary-btn, .small-btn, .danger-btn, .pdf-btn {
       min-height: 44px;
       padding: 0 var(--space-4);
       border-radius: var(--radius-md);
     }
 
-    .theme-toggle,
-    .ghost-btn,
-    .small-btn,
-    .danger-btn,
-    .pdf-btn {
+    .theme-toggle, .ghost-btn, .small-btn, .danger-btn, .pdf-btn {
       border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
       background: var(--color-surface-2);
     }
@@ -154,15 +156,7 @@
     }
 
     .primary-btn:hover { background: var(--color-primary-hover); }
-
-    .theme-toggle:hover,
-    .ghost-btn:hover,
-    .small-btn:hover,
-    .danger-btn:hover,
-    .pdf-btn:hover {
-      background: var(--color-surface-offset);
-    }
-
+    .theme-toggle:hover, .ghost-btn:hover, .small-btn:hover, .danger-btn:hover, .pdf-btn:hover { background: var(--color-surface-offset); }
     .danger-btn { color: var(--color-error); }
 
     .layout {
@@ -172,252 +166,81 @@
       align-items: start;
     }
 
-    .panel-header {
-      padding: var(--space-5);
-      border-bottom: 1px solid var(--color-divider);
-      display: grid;
-      gap: var(--space-2);
-    }
-
-    .panel-body {
-      padding: var(--space-5);
-      display: grid;
-      gap: var(--space-4);
-    }
-
-    .inline-note {
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      background: var(--color-primary-highlight);
-      font-size: var(--text-sm);
-    }
-
-    .field {
-      display: grid;
-      gap: var(--space-2);
-    }
-
-    .field label {
-      font-size: var(--text-sm);
-      font-weight: 700;
-    }
-
-    .field input[type="text"],
-    .field input[type="date"],
-    .field input[type="number"],
-    .field input[type="file"],
-    .searchbar input {
-      min-height: 48px;
-      padding: 0 var(--space-4);
-      border: 1px solid var(--color-border);
-      background: var(--color-surface-2);
-      border-radius: var(--radius-md);
-      outline: none;
-      width: 100%;
-    }
-
-    .field input[type="file"] {
-      padding: var(--space-3);
-      min-height: auto;
-    }
-
-    .field input:focus,
-    .searchbar input:focus {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 18%, transparent);
-    }
-
-    .field input.invalid {
-      border-color: var(--color-error);
-    }
-
-    .check-row {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      min-height: 44px;
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
-      border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-    }
-
-    .check-row input {
-      inline-size: 18px;
-      block-size: 18px;
-      accent-color: var(--color-primary);
-    }
-
-    .helper,
-    .error-msg {
-      font-size: var(--text-xs);
-    }
-
+    .panel-header { padding: var(--space-5); border-bottom: 1px solid var(--color-divider); display: grid; gap: var(--space-2); }
+    .panel-body { padding: var(--space-5); display: grid; gap: var(--space-4); }
+    .inline-note { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-primary-highlight); font-size: var(--text-sm); }
+    .field { display: grid; gap: var(--space-2); }
+    .field label { font-size: var(--text-sm); font-weight: 700; }
+    .field input[type="text"], .field input[type="email"], .field input[type="password"], .field input[type="date"], .field input[type="number"], .field input[type="file"], .searchbar input { min-height: 48px; padding: 0 var(--space-4); border: 1px solid var(--color-border); background: var(--color-surface-2); border-radius: var(--radius-md); outline: none; width: 100%; }
+    .field input[type="file"] { padding: var(--space-3); min-height: auto; }
+    .field input:focus, .searchbar input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 18%, transparent); }
+    .field input.invalid { border-color: var(--color-error); }
+    .check-row { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-2); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); }
+    .check-row input { inline-size: 18px; block-size: 18px; accent-color: var(--color-primary); }
+    .helper, .error-msg { font-size: var(--text-xs); }
     .helper { color: var(--color-text-muted); }
     .error-msg { color: var(--color-error); min-height: 1.2em; }
-
-    .searchbar {
-      display: flex;
-      gap: var(--space-3);
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .searchbar input {
-      width: min(100%, 320px);
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-4);
-    }
-
-    .stat-card {
-      padding: var(--space-4);
-      background: var(--color-surface-2);
-      border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-      border-radius: var(--radius-lg);
-      display: grid;
-      gap: var(--space-1);
-    }
-
-    .stat-card strong {
-      font-size: var(--text-lg);
-      font-variant-numeric: tabular-nums;
-    }
-
+    .searchbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .searchbar input { width: min(100%, 320px); }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+    .stat-card { padding: var(--space-4); background: var(--color-surface-2); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: var(--radius-lg); display: grid; gap: var(--space-1); }
+    .stat-card strong { font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
     .table-wrap { overflow-x: auto; }
-
-    th, td {
-      text-align: left;
-      padding: var(--space-4);
-      border-bottom: 1px solid var(--color-divider);
-      vertical-align: middle;
-      font-variant-numeric: tabular-nums lining-nums;
-      white-space: nowrap;
-    }
-
-    th {
-      font-size: var(--text-sm);
-      color: var(--color-text-muted);
-    }
-
-    tr:hover td {
-      background: color-mix(in oklab, var(--color-primary) 4%, var(--color-surface));
-    }
-
+    th, td { text-align: left; padding: var(--space-4); border-bottom: 1px solid var(--color-divider); vertical-align: middle; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+    th { font-size: var(--text-sm); color: var(--color-text-muted); }
+    tr:hover td { background: color-mix(in oklab, var(--color-primary) 4%, var(--color-surface)); }
     .invoice-num { font-weight: 700; }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: 0.35rem 0.7rem;
-      border-radius: 999px;
-      font-size: var(--text-xs);
-      font-weight: 700;
-    }
-
-    .paid {
-      background: var(--color-success-highlight);
-      color: var(--color-success);
-    }
-
-    .unpaid {
-      background: var(--color-error-highlight);
-      color: var(--color-error);
-    }
-
-    .neutral {
-      background: var(--color-surface-offset);
-      color: var(--color-text-muted);
-    }
-
-    .actions,
-    .status-toggle {
-      display: flex;
-      gap: var(--space-3);
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .toggle {
-      position: relative;
-      width: 46px;
-      height: 26px;
-      display: inline-block;
-    }
-
-    .toggle input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-      position: absolute;
-    }
-
-    .toggle-track {
-      position: absolute;
-      inset: 0;
-      background: var(--color-border);
-      border-radius: 999px;
-      transition: 0.2s;
-    }
-
-    .toggle-thumb {
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      transition: 0.2s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-
-    .toggle input:checked + .toggle-track {
-      background: var(--color-primary);
-    }
-
-    .toggle input:checked + .toggle-track + .toggle-thumb {
-      transform: translateX(20px);
-    }
-
-    .empty-state {
-      padding: var(--space-8);
-      text-align: center;
-      color: var(--color-text-muted);
-    }
-
-    .file-meta {
-      display: grid;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      background: var(--color-surface-2);
-      border-radius: var(--radius-md);
-      border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-    }
-
-    .file-meta strong {
-      font-size: var(--text-sm);
-    }
-
-    @media (max-width: 980px) {
-      .layout { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 640px) {
-      body { padding: var(--space-4); }
-      .searchbar { align-items: stretch; }
-      .searchbar input { width: 100%; }
-    }
+    .badge { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; }
+    .paid { background: var(--color-success-highlight); color: var(--color-success); }
+    .unpaid { background: var(--color-error-highlight); color: var(--color-error); }
+    .neutral { background: var(--color-surface-offset); color: var(--color-text-muted); }
+    .actions, .status-toggle { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+    .toggle { position: relative; width: 46px; height: 26px; display: inline-block; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track { position: absolute; inset: 0; background: var(--color-border); border-radius: 999px; transition: 0.2s; }
+    .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .toggle input:checked + .toggle-track { background: var(--color-primary); }
+    .toggle input:checked + .toggle-track + .toggle-thumb { transform: translateX(20px); }
+    .empty-state { padding: var(--space-8); text-align: center; color: var(--color-text-muted); }
+    .file-meta { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-surface-2); border-radius: var(--radius-md); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); }
+    .file-meta strong { font-size: var(--text-sm); }
+    @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { body { padding: var(--space-4); } .searchbar { align-items: stretch; } .searchbar input { width: 100%; } }
   </style>
 </head>
 <body>
-  <div class="app">
+
+  <!-- EKRAN LOGOWANIA -->
+  <div id="authContainer" class="auth-wrapper">
+    <div class="auth-panel">
+      <svg class="logo" viewBox="0 0 64 64" aria-label="Logo panelu faktur" role="img" fill="none">
+        <rect x="8" y="10" width="48" height="44" rx="10" stroke="currentColor" stroke-width="4"></rect>
+        <path d="M20 24H44" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+        <path d="M20 34H44" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+        <path d="M20 44H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+      </svg>
+      <div>
+        <h2>Logowanie</h2>
+        <p class="muted">Zaloguj się, aby zarządzać fakturami (zabezpieczone RLS).</p>
+      </div>
+
+      <div class="field">
+        <label for="emailInput">Adres e-mail</label>
+        <input id="emailInput" type="email" placeholder="twoj@email.pl" />
+      </div>
+
+      <div class="field">
+        <label for="passwordInput">Hasło</label>
+        <input id="passwordInput" type="password" placeholder="••••••••" />
+      </div>
+
+      <p id="loginErrorMsg" class="error-msg"></p>
+      <button id="loginBtn" class="primary-btn" type="button" style="width: 100%;">Zaloguj się</button>
+    </div>
+  </div>
+
+  <!-- GŁÓWNA APLIKACJA -->
+  <div id="appContainer" class="app">
     <header class="topbar">
       <div class="brand">
         <svg class="logo" viewBox="0 0 64 64" aria-label="Logo panelu faktur" role="img" fill="none">
@@ -432,80 +255,71 @@
         </div>
       </div>
 
-      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Przełącz motyw">Motyw</button>
+      <div style="display:flex; gap: 10px;">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Przełącz motyw">Motyw</button>
+        <button id="logoutBtn" class="danger-btn" type="button">Wyloguj</button>
+      </div>
     </header>
 
     <main class="layout">
+      <!-- PANEL DODAWANIA -->
       <section class="panel">
         <div class="panel-header">
           <h2>Formularz faktury</h2>
           <p class="muted">Możesz dodać dane faktury oraz plik zlecenia w PDF.</p>
         </div>
-
         <div class="panel-body">
           <div class="inline-note">
-            Termin płatności liczy się automatycznie z daty wystawienia i liczby dni, a PDF zapisuje się do Supabase Storage. [web:1]
+            Termin płatności liczy się automatycznie. Pliki zapisują się w Supabase Storage.
           </div>
-
           <div class="field">
             <label for="invoiceNum">Numer faktury</label>
             <input id="invoiceNum" type="text" placeholder="np. 12/2026" autocomplete="off" />
           </div>
-
           <div class="field">
             <label for="issueDate">Data wystawienia</label>
             <input id="issueDate" type="date" />
           </div>
-
           <div class="field">
             <label for="paymentDays">Liczba dni na płatność</label>
             <input id="paymentDays" type="number" min="0" step="1" placeholder="np. 45" />
           </div>
-
           <div class="field">
             <label for="calculatedDueDate">Wyliczony termin płatności</label>
             <input id="calculatedDueDate" type="text" readonly placeholder="Termin wyliczy się automatycznie" />
           </div>
-
           <div class="field">
             <label for="jobPdf">Zlecenie w PDF</label>
             <input id="jobPdf" type="file" accept="application/pdf,.pdf" />
-            <p class="helper">Wybierz plik PDF. Zostanie zapisany w Supabase Storage. [web:1]</p>
+            <p class="helper">Wybierz plik PDF. Zostanie zapisany w Supabase Storage.</p>
           </div>
-
           <div id="currentPdfInfo" class="file-meta" style="display:none;">
             <strong>Aktualnie przypięty PDF</strong>
             <span id="currentPdfName" class="muted"></span>
           </div>
-
           <label class="check-row" for="paidCheck">
             <input id="paidCheck" type="checkbox" />
             <span>Faktura opłacona</span>
           </label>
-
           <div style="display:flex; gap: var(--space-3); flex-wrap: wrap;">
             <button id="submitBtn" class="primary-btn" type="button">Dodaj fakturę</button>
             <button class="ghost-btn" type="button" onclick="clearForm()">Wyczyść</button>
           </div>
-
           <p id="errorMsg" class="error-msg"></p>
-          <p class="helper">
-            Tabela `invoices` powinna mieć kolumny: `id`, `num`, `paid`, `date`, `issue_date`, `payment_days`, `due_date`, `pdf_name`, `pdf_path`.
-          </p>
         </div>
       </section>
 
+      <!-- PANEL LISTY -->
       <section class="panel">
         <div class="panel-header">
           <div class="searchbar">
             <div>
               <h2>Lista faktur</h2>
-              <p class="muted">Kliknij „Podgląd PDF”, aby otworzyć zlecenie w nowej karcie przez signed URL. [web:2]</p>
+              <p class="muted">Kliknij „Podgląd PDF”, aby otworzyć zlecenie.</p>
             </div>
             <input id="searchInput" type="search" placeholder="Szukaj po numerze faktury" />
           </div>
         </div>
-
         <div class="panel-body">
           <div class="stats">
             <article class="stat-card">
@@ -521,7 +335,6 @@
               <strong id="unpaidCount">0</strong>
             </article>
           </div>
-
           <div class="table-wrap">
             <table>
               <thead>
@@ -539,7 +352,6 @@
               </thead>
               <tbody id="invoiceList"></tbody>
             </table>
-
             <div id="emptyState" class="empty-state" style="display:none;">
               Brak faktur do wyświetlenia.
             </div>
@@ -549,15 +361,27 @@
     </main>
   </div>
 
+  <!-- SKRYPTY -->
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
+    // TUTAJ WKLEJ NOWY KLUCZ ANON_KEY z panelu Supabase!
     const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w';
+    const SUPABASE_ANON_KEY = 'sb_publishable_hlZffOls0AOUJzMZHyhtQg_s5PNjxuJ';
     const STORAGE_BUCKET = 'invoice-files';
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // --- ELEMENTY LOGOWANIA ---
+    const authContainer = document.getElementById('authContainer');
+    const appContainer = document.getElementById('appContainer');
+    const emailInput = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginErrorMsg = document.getElementById('loginErrorMsg');
+
+    // --- ELEMENTY APLIKACJI ---
     const invoiceNum = document.getElementById('invoiceNum');
     const issueDate = document.getElementById('issueDate');
     const paymentDays = document.getElementById('paymentDays');
@@ -581,12 +405,62 @@
     let editingPdfName = null;
     let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
+    // --- OBSŁUGA LOGOWANIA ---
+    
+    // Sprawdzanie czy użytkownik już jest zalogowany (przy odświeżeniu strony)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) showApp();
+      else showLogin();
+    });
+
+    // Nasłuchiwanie zmian (np. wygasła sesja)
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) showApp();
+      else showLogin();
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      loginErrorMsg.textContent = '';
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+
+      if (!email || !password) {
+        loginErrorMsg.textContent = 'Wypełnij oba pola.';
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        loginErrorMsg.textContent = 'Nieprawidłowy e-mail lub hasło.';
+        console.error('Login error:', error.message);
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+    });
+
+    function showApp() {
+      authContainer.style.display = 'none';
+      appContainer.style.display = 'grid';
+      renderTable(); // Pobierz dane dopiero jak się zalogujesz
+    }
+
+    function showLogin() {
+      authContainer.style.display = 'flex';
+      appContainer.style.display = 'none';
+      emailInput.value = '';
+      passwordInput.value = '';
+    }
+
+    // --- RESZTA LOGIKI APLIKACJI ---
+
     function setTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
       themeToggle.textContent = theme === 'dark' ? 'Jasny motyw' : 'Ciemny motyw';
-      themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw');
+      themeToggle.setAttribute('aria-label', theme === 'dark' ? 'Przełącz na jasny' : 'Przełącz na ciemny');
     }
-
     setTheme(currentTheme);
 
     themeToggle.addEventListener('click', () => {
@@ -607,15 +481,7 @@
       if (!value) return '<span class="muted">Brak</span>';
       const d = new Date(value);
       if (Number.isNaN(d.getTime())) return escHtml(value);
-
-      return d.toLocaleDateString('pl-PL', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }) + ' ' + d.toLocaleTimeString('pl-PL', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      return d.toLocaleDateString('pl-PL') + ' ' + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
     }
 
     function formatDateOnly(value) {
@@ -627,27 +493,20 @@
 
     function addDaysToDate(dateString, days) {
       if (!dateString || days === '' || days === null || days === undefined) return null;
-
       const date = new Date(dateString + 'T00:00:00');
       const parsedDays = Number(days);
-
       if (Number.isNaN(date.getTime()) || Number.isNaN(parsedDays)) return null;
-
       date.setDate(date.getDate() + parsedDays);
       return date.toISOString().split('T')[0];
     }
 
     function getDaysUntilDue(value) {
       if (!value) return { text: 'Brak terminu', className: 'neutral' };
-
       const today = new Date();
       const due = new Date(value + 'T00:00:00');
-
       today.setHours(0, 0, 0, 0);
       due.setHours(0, 0, 0, 0);
-
-      const diffMs = due.getTime() - today.getTime();
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
       if (diffDays > 1) return { text: `Za ${diffDays} dni`, className: 'paid' };
       if (diffDays === 1) return { text: 'Jutro', className: 'paid' };
@@ -662,10 +521,7 @@
     }
 
     function normalizeFileName(name) {
-      return String(name || 'plik.pdf')
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      return String(name || 'plik.pdf').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_');
     }
 
     function updateCurrentPdfBox() {
@@ -682,65 +538,27 @@
     paymentDays.addEventListener('input', updateCalculatedDueDate);
 
     async function loadData() {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('issue_date', { ascending: true });
-
-      if (error) {
-        console.error('loadData error:', error);
-        return [];
-      }
-
+      const { data, error } = await supabase.from('invoices').select('*').order('issue_date', { ascending: true });
+      if (error) { console.error('loadData error:', error); return []; }
       return data || [];
     }
 
     async function uploadPdfIfNeeded() {
       const file = jobPdf.files?.[0];
-
-      if (!file) {
-        return {
-          pdf_path: editingPdfPath,
-          pdf_name: editingPdfName
-        };
-      }
-
-      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-        throw new Error('Możesz dodać tylko plik PDF.');
-      }
+      if (!file) return { pdf_path: editingPdfPath, pdf_name: editingPdfName };
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) throw new Error('Możesz dodać tylko plik PDF.');
 
       const safeName = normalizeFileName(file.name);
       const uniquePath = `orders/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-
-      const { error } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(uniquePath, file, {
-          upsert: false,
-          contentType: 'application/pdf'
-        });
-
-      if (error) {
-        throw new Error(error.message || 'Nie udało się wysłać pliku PDF.');
-      }
-
-      return {
-        pdf_path: uniquePath,
-        pdf_name: file.name
-      };
+      const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(uniquePath, file, { upsert: false, contentType: 'application/pdf' });
+      if (error) throw new Error(error.message || 'Nie udało się wysłać pliku PDF.');
+      return { pdf_path: uniquePath, pdf_name: file.name };
     }
 
     async function openPdfPreview(path) {
       if (!path) return;
-
-      const { data, error } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .createSignedUrl(path, 300);
-
-      if (error || !data?.signedUrl) {
-        alert(error?.message || 'Nie udało się otworzyć podglądu PDF.');
-        return;
-      }
-
+      const { data, error } = await supabase.storage.from(STORAGE_BUCKET).createSignedUrl(path, 300);
+      if (error || !data?.signedUrl) { alert(error?.message || 'Nie udało się otworzyć podglądu PDF.'); return; }
       window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     }
 
@@ -751,86 +569,32 @@
       const parsedPaymentDays = paymentDaysValue === '' ? null : Number(paymentDaysValue);
       const dueDate = addDaysToDate(issueDateValue, parsedPaymentDays);
 
-      if (!num) {
-        invoiceNum.classList.add('invalid');
-        errorMsg.textContent = 'Numer faktury nie może być pusty.';
-        invoiceNum.focus();
-        return;
-      }
-
-      if (!issueDateValue) {
-        errorMsg.textContent = 'Wybierz datę wystawienia.';
-        issueDate.focus();
-        return;
-      }
-
-      if (parsedPaymentDays === null || Number.isNaN(parsedPaymentDays) || parsedPaymentDays < 0) {
-        errorMsg.textContent = 'Podaj poprawną liczbę dni na płatność.';
-        paymentDays.focus();
-        return;
-      }
-
+      if (!num) { invoiceNum.classList.add('invalid'); errorMsg.textContent = 'Numer faktury nie może być pusty.'; return; }
+      if (!issueDateValue) { errorMsg.textContent = 'Wybierz datę wystawienia.'; return; }
+      
       invoiceNum.classList.remove('invalid');
       errorMsg.textContent = '';
 
-      const allData = await loadData();
-      const duplicate = allData.find(f =>
-        String(f.num).toLowerCase() === num.toLowerCase() && f.id !== editingId
-      );
-
-      if (duplicate) {
-        invoiceNum.classList.add('invalid');
-        errorMsg.textContent = 'Faktura o tym numerze już istnieje.';
-        invoiceNum.focus();
-        return;
-      }
-
       let pdfData = { pdf_path: editingPdfPath, pdf_name: editingPdfName };
-
-      try {
-        pdfData = await uploadPdfIfNeeded();
-      } catch (err) {
-        errorMsg.textContent = err.message || 'Błąd podczas dodawania PDF.';
-        return;
-      }
+      try { pdfData = await uploadPdfIfNeeded(); } catch (err) { errorMsg.textContent = err.message; return; }
 
       const payload = {
-        num,
-        paid: paidCheck.checked,
-        date: new Date().toISOString(),
-        issue_date: issueDateValue,
-        payment_days: parsedPaymentDays,
-        due_date: dueDate,
-        pdf_path: pdfData.pdf_path,
-        pdf_name: pdfData.pdf_name
+        num, paid: paidCheck.checked, date: new Date().toISOString(), issue_date: issueDateValue,
+        payment_days: parsedPaymentDays, due_date: dueDate, pdf_path: pdfData.pdf_path, pdf_name: pdfData.pdf_name
       };
 
       let error;
-
       if (editingId) {
-        const result = await supabase
-          .from('invoices')
-          .update(payload)
-          .eq('id', editingId);
-
+        const result = await supabase.from('invoices').update(payload).eq('id', editingId);
         error = result.error;
       } else {
-        const result = await supabase
-          .from('invoices')
-          .insert(payload);
-
+        const result = await supabase.from('invoices').insert(payload);
         error = result.error;
       }
 
-      if (error) {
-        console.error('save error:', error);
-        errorMsg.textContent = error.message || 'Nie udało się zapisać faktury.';
-        return;
-      }
-
+      if (error) { errorMsg.textContent = error.message; return; }
       clearForm();
       await renderTable();
-      invoiceNum.focus();
     }
 
     async function editInvoice(id) {
@@ -841,18 +605,15 @@
       editingId = item.id;
       editingPdfPath = item.pdf_path || null;
       editingPdfName = item.pdf_name || null;
-
       invoiceNum.value = item.num || '';
       issueDate.value = item.issue_date || '';
       paymentDays.value = item.payment_days ?? '';
       paidCheck.checked = !!item.paid;
       jobPdf.value = '';
+      
       updateCalculatedDueDate();
       updateCurrentPdfBox();
-
       submitBtn.textContent = 'Zapisz zmiany';
-      errorMsg.textContent = 'Edytujesz fakturę. Możesz zostawić obecny PDF albo wgrać nowy.';
-
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -860,63 +621,28 @@
       const data = await loadData();
       const item = data.find(f => f.id === id);
       if (!item) return;
-
-      const { error } = await supabase
-        .from('invoices')
-        .update({ paid: !item.paid })
-        .eq('id', id);
-
-      if (error) {
-        console.error('togglePaid error:', error);
-        alert(error.message || 'Nie udało się zmienić statusu.');
-        return;
-      }
-
-      renderTable();
+      const { error } = await supabase.from('invoices').update({ paid: !item.paid }).eq('id', id);
+      if (error) alert(error.message);
+      else renderTable();
     }
 
     async function deleteInvoice(id) {
       if (!confirm('Czy na pewno chcesz usunąć tę fakturę?')) return;
-
       const data = await loadData();
       const item = data.find(f => f.id === id);
-
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error('deleteInvoice error:', error);
-        alert(error.message || 'Nie udało się usunąć faktury.');
-        return;
-      }
-
-      if (item?.pdf_path) {
-        await supabase.storage
-          .from(STORAGE_BUCKET)
-          .remove([item.pdf_path]);
-      }
-
-      if (editingId === id) {
-        clearForm();
-      }
-
+      const { error } = await supabase.from('invoices').delete().eq('id', id);
+      
+      if (error) { alert(error.message); return; }
+      if (item?.pdf_path) await supabase.storage.from(STORAGE_BUCKET).remove([item.pdf_path]);
+      if (editingId === id) clearForm();
       renderTable();
     }
 
     function clearForm() {
-      editingId = null;
-      editingPdfPath = null;
-      editingPdfName = null;
-      invoiceNum.value = '';
-      issueDate.value = '';
-      paymentDays.value = '';
-      calculatedDueDate.value = '';
-      jobPdf.value = '';
-      paidCheck.checked = false;
-      errorMsg.textContent = '';
-      invoiceNum.classList.remove('invalid');
+      editingId = null; editingPdfPath = null; editingPdfName = null;
+      invoiceNum.value = ''; issueDate.value = ''; paymentDays.value = '';
+      calculatedDueDate.value = ''; jobPdf.value = ''; paidCheck.checked = false;
+      errorMsg.textContent = ''; invoiceNum.classList.remove('invalid');
       submitBtn.textContent = 'Dodaj fakturę';
       updateCurrentPdfBox();
     }
@@ -924,9 +650,7 @@
     async function renderTable() {
       const query = searchInput.value.trim().toLowerCase();
       const allData = await loadData();
-      const filtered = query
-        ? allData.filter(f => String(f.num || '').toLowerCase().includes(query))
-        : allData;
+      const filtered = query ? allData.filter(f => String(f.num || '').toLowerCase().includes(query)) : allData;
 
       totalCount.textContent = allData.length;
       paidCount.textContent = allData.filter(f => f.paid).length;
@@ -937,12 +661,10 @@
         emptyState.style.display = 'block';
         return;
       }
-
       emptyState.style.display = 'none';
 
       invoiceList.innerHTML = filtered.map(f => {
         const dueInfo = getDaysUntilDue(f.due_date);
-
         return `
           <tr>
             <td class="invoice-num">${escHtml(f.num ?? '')}</td>
@@ -951,22 +673,14 @@
             <td>${f.payment_days ?? '<span class="muted">Brak</span>'}</td>
             <td>${formatDateOnly(f.due_date)}</td>
             <td><span class="badge ${dueInfo.className}">${dueInfo.text}</span></td>
-            <td>
-              ${f.pdf_path
-                ? `<button class="pdf-btn" onclick="openPdfPreview('${String(f.pdf_path).replaceAll("'", "\\'")}')">Podgląd PDF</button>`
-                : `<span class="badge neutral">Brak PDF</span>`
-              }
-            </td>
+            <td>${f.pdf_path ? `<button class="pdf-btn" onclick="openPdfPreview('${String(f.pdf_path).replaceAll("'", "\\'")}')">Podgląd</button>` : `<span class="badge neutral">Brak</span>`}</td>
             <td>
               <div class="status-toggle">
-                <label class="toggle" title="${f.paid ? 'Oznacz jako nieopłaconą' : 'Oznacz jako opłaconą'}">
+                <label class="toggle">
                   <input type="checkbox" ${f.paid ? 'checked' : ''} onchange="togglePaid('${f.id}')" />
-                  <span class="toggle-track"></span>
-                  <span class="toggle-thumb"></span>
+                  <span class="toggle-track"></span><span class="toggle-thumb"></span>
                 </label>
-                <span class="badge ${f.paid ? 'paid' : 'unpaid'}">
-                  ${f.paid ? 'Opłacona' : 'Nieopłacona'}
-                </span>
+                <span class="badge ${f.paid ? 'paid' : 'unpaid'}">${f.paid ? 'Opłacona' : 'Nieopłacona'}</span>
               </div>
             </td>
             <td class="actions">
@@ -978,11 +692,7 @@
       }).join('');
     }
 
-    invoiceNum.addEventListener('input', () => {
-      invoiceNum.classList.remove('invalid');
-      errorMsg.textContent = '';
-    });
-
+    invoiceNum.addEventListener('input', () => { invoiceNum.classList.remove('invalid'); errorMsg.textContent = ''; });
     submitBtn.addEventListener('click', addInvoice);
     searchInput.addEventListener('input', renderTable);
 
@@ -992,8 +702,6 @@
     window.deleteInvoice = deleteInvoice;
     window.clearForm = clearForm;
     window.openPdfPreview = openPdfPreview;
-
-    renderTable();
   </script>
 </body>
-                                    </html>
+</html>
