@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 const url = "https://ncjttizrnukovuotrowp.supabase.co";
-const key = "WSTAW_TUTAJ_NOWY_KLUCZ_ANON_LUB_PUBLISHABLE";
+const key = "sb_publishable_hlZffOls0AOUJzMZHyhtQg_s5PNjxuJ";
 const sb = createClient(url, key);
 
 const money = n => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(Number(n || 0));
