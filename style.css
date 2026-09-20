@@ -29,6 +29,9 @@ body {
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   padding: var(--spacing) 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .app-header h1 {
@@ -41,6 +44,25 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--spacing);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.login-box {
+  max-width: 380px;
+  margin: 60px auto 0;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.login-box h2 {
+  margin-top: 0;
+  color: var(--color-primary-dark);
+  text-align: center;
 }
 
 .status-bar {
@@ -253,7 +275,7 @@ body {
   margin-top: 8px;
 }
 
-/* Responsywność - widok kart na mobile */
+/* Responsywnosc - widok kart na mobile */
 @media (max-width: 720px) {
   .container {
     padding: 12px;

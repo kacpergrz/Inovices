@@ -1,10 +1,10 @@
 // =========================================================================
 // KONFIGURACJA SUPABASE
 // =========================================================================
-// TODO: uzupełnić przed wdrożeniem
-const SUPABASE_URL = "https://ncjttizrnukovuotrowp.supabase.co";
-// TODO: uzupełnić przed wdrożeniem
-const SUPABASE_ANON_KEY = "sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w";
+// TODO: uzupelnic przed wdrozeniem
+const SUPABASE_URL = "TODO_SUPABASE_URL";
+// TODO: uzupelnic przed wdrozeniem
+const SUPABASE_ANON_KEY = "TODO_SUPABASE_ANON_KEY";
 
 // Inicjalizacja klienta Supabase (biblioteka wgrana z CDN w index.html)
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -33,8 +33,78 @@ const confirmModalText = document.getElementById("confirm-modal-text");
 
 const dueDateModal = document.getElementById("due-date-modal");
 
+const loginView = document.getElementById("login-view");
+const appView = document.getElementById("app-view");
+const loginForm = document.getElementById("login-form");
+const loginErrorEl = document.getElementById("login-error");
+const btnLogout = document.getElementById("btn-logout");
+
 // =========================================================================
-// FUNKCJE POMOCNICZE - STATUS / BŁĘDY
+// AUTORYZACJA (Supabase Auth) - logowanie/wylogowanie, ochrona panelu Faktury
+// =========================================================================
+
+// Przelacza widok logowania / panelu Faktury w zaleznosci od stanu sesji.
+function renderAuthState(session) {
+  if (session) {
+    loginView.classList.add("hidden");
+    appView.classList.remove("hidden");
+    btnLogout.classList.remove("hidden");
+  } else {
+    loginView.classList.remove("hidden");
+    appView.classList.add("hidden");
+    btnLogout.classList.add("hidden");
+  }
+}
+
+// Logowanie e-mail + haslo. Konta tworzone recznie w Supabase Dashboard (panel nie ma rejestracji).
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  loginErrorEl.textContent = "";
+
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+
+  if (!email || !password) {
+    loginErrorEl.textContent = "Podaj e-mail i hasło.";
+    return;
+  }
+
+  showLoading("Logowanie...");
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    clearStatus();
+    loginForm.reset();
+    renderAuthState(data.session);
+    await fetchInvoices();
+  } catch (err) {
+    console.error(err);
+    clearStatus();
+    loginErrorEl.textContent = "Nieprawidłowy e-mail lub hasło.";
+  }
+});
+
+// Wylogowanie z panelu.
+btnLogout.addEventListener("click", async () => {
+  showLoading("Wylogowywanie...");
+  try {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) throw error;
+    clearStatus();
+    renderAuthState(null);
+  } catch (err) {
+    console.error(err);
+    showError("Nie udało się wylogować — sprawdź połączenie.");
+  }
+});
+
+// Reaguje na zmiany sesji (np. wygasniecie tokenu) w trakcie pracy z panelem.
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  renderAuthState(session);
+});
+
+// =========================================================================
+// FUNKCJE POMOCNICZE - STATUS / BLEDY
 // =========================================================================
 function showLoading(message) {
   globalStatusEl.textContent = message || "Wczytywanie...";
@@ -81,7 +151,7 @@ function isValidNip(value) {
   return /^\d{10}$/.test(value);
 }
 
-// Walidacja pól formularza "Dodaj/Edytuj fakturę". Zwraca true jeśli dane są poprawne.
+// Walidacja pol formularza "Dodaj/Edytuj fakture". Zwraca true jesli dane sa poprawne.
 function validateInvoiceForm(data) {
   clearFormErrors();
   let isValid = true;
@@ -128,7 +198,7 @@ function validateInvoiceForm(data) {
 // FUNKCJE CRUD - SUPABASE
 // =========================================================================
 
-// Pobiera wszystkie faktury z bazy i renderuje tabelę.
+// Pobiera wszystkie faktury z bazy i renderuje tabele.
 async function fetchInvoices() {
   showLoading("Wczytywanie faktur...");
   try {
@@ -177,7 +247,7 @@ async function searchInvoices(term) {
   }
 }
 
-// Dodaje nową fakturę do bazy (INSERT).
+// Dodaje nowa fakture do bazy (INSERT).
 async function addInvoice(invoiceData) {
   showLoading("Zapisywanie faktury...");
   try {
@@ -193,7 +263,7 @@ async function addInvoice(invoiceData) {
   }
 }
 
-// Aktualizuje istniejącą fakturę (UPDATE po id).
+// Aktualizuje istniejaca fakture (UPDATE po id).
 async function updateInvoice(id, invoiceData) {
   showLoading("Zapisywanie zmian...");
   try {
@@ -209,7 +279,7 @@ async function updateInvoice(id, invoiceData) {
   }
 }
 
-// Przełącza status płatności faktury (opłacona <-> nieopłacona).
+// Przelacza status platnosci faktury (oplacona <-> nieoplacona).
 async function togglePaymentStatus(id, newPaidValue) {
   showLoading("Aktualizowanie statusu...");
   try {
@@ -223,7 +293,7 @@ async function togglePaymentStatus(id, newPaidValue) {
   }
 }
 
-// Ustawia termin płatności - albo przez liczbę dni od daty wystawienia, albo przez konkretną datę.
+// Ustawia termin platnosci - albo przez liczbe dni od daty wystawienia, albo przez konkretna date.
 async function setDueDate(id, dueDateValue, paymentDaysValue) {
   showLoading("Zapisywanie terminu płatności...");
   try {
@@ -294,7 +364,7 @@ function escapeHtml(str) {
 }
 
 // =========================================================================
-// OBSŁUGA WYSZUKIWANIA
+// OBSLUGA WYSZUKIWANIA
 // =========================================================================
 let searchDebounceTimer = null;
 searchInputEl.addEventListener("input", (e) => {
@@ -306,7 +376,7 @@ searchInputEl.addEventListener("input", (e) => {
 });
 
 // =========================================================================
-// OBSŁUGA MODALA DODAJ/EDYTUJ FAKTURĘ
+// OBSLUGA MODALA DODAJ/EDYTUJ FAKTURE
 // =========================================================================
 document.getElementById("btn-open-add").addEventListener("click", () => {
   openInvoiceForm(null);
@@ -390,7 +460,7 @@ invoiceForm.addEventListener("submit", (e) => {
   });
 });
 
-// Podgląd przeliczenia kwoty na PLN po średnim kursie NBP (informacyjny, nie zapisywany do bazy).
+// Podglad przeliczenia kwoty na PLN po srednim kursie NBP (informacyjny, nie zapisywany do bazy).
 async function updateNbpPreview() {
   const currency = document.getElementById("f-currency").value;
   const grossAmount = parseFloat(document.getElementById("f-gross-amount").value);
@@ -441,7 +511,7 @@ document.getElementById("confirm-modal-yes").addEventListener("click", async () 
 document.getElementById("confirm-modal-cancel").addEventListener("click", closeConfirmModal);
 
 // =========================================================================
-// AKCJE W WIERSZACH TABELI (delegacja zdarzeń)
+// AKCJE W WIERSZACH TABELI (delegacja zdarzen)
 // =========================================================================
 tbodyEl.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-action]");
@@ -470,7 +540,7 @@ tbodyEl.addEventListener("click", (e) => {
 });
 
 // =========================================================================
-// MODAL: USTAW TERMIN PŁATNOŚCI
+// MODAL: USTAW TERMIN PLATNOSCI
 // =========================================================================
 function openDueDateModal(invoice) {
   currentDueDateInvoiceId = invoice.id;
@@ -537,6 +607,10 @@ document.getElementById("btn-save-due-date").addEventListener("click", () => {
 // =========================================================================
 // INICJALIZACJA
 // =========================================================================
-document.addEventListener("DOMContentLoaded", () => {
-  fetchInvoices();
+document.addEventListener("DOMContentLoaded", async () => {
+  const { data } = await supabaseClient.auth.getSession();
+  renderAuthState(data.session);
+  if (data.session) {
+    await fetchInvoices();
+  }
 });

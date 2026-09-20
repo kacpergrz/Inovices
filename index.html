@@ -9,9 +9,32 @@
 <body>
   <header class="app-header">
     <h1>Faktury</h1>
+    <button id="btn-logout" class="btn btn-secondary btn-small hidden">Wyloguj</button>
   </header>
 
-  <main class="container">
+  <!-- WIDOK LOGOWANIA -->
+  <main class="container" id="login-view">
+    <section class="login-box">
+      <h2>Zaloguj się</h2>
+      <form id="login-form" novalidate>
+        <div class="form-row">
+          <label for="login-email">E-mail</label>
+          <input type="email" id="login-email" required>
+        </div>
+        <div class="form-row">
+          <label for="login-password">Hasło</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <span class="error-msg" id="login-error"></span>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Zaloguj</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- WIDOK PANELU FAKTUR (widoczny po zalogowaniu) -->
+  <main class="container hidden" id="app-view">
     <!-- Komunikaty globalne (błędy / ładowanie) -->
     <div id="global-status" class="status-bar" aria-live="polite"></div>
 
@@ -49,7 +72,7 @@
     </section>
   </main>
 
-  <!-- MODAL: Dodaj / Edytuj fakturę -->
+  <!-- MODAL: Dodaj / Edytuj faktura -->
   <div id="invoice-form-modal" class="modal-overlay hidden">
     <div class="modal-box">
       <h2 id="invoice-form-title">Dodaj fakturę</h2>
