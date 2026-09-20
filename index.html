@@ -38,11 +38,27 @@
     <!-- Komunikaty globalne (błędy / ładowanie) -->
     <div id="global-status" class="status-bar" aria-live="polite"></div>
 
-    <!-- Sekcja wyszukiwania + dodawania -->
+    <!-- Sekcja wyszukiwania, filtrowania, sortowania i dodawania -->
     <section class="toolbar">
       <div class="search-box">
         <label for="search-input">Szukaj (sprzedawca lub NIP)</label>
         <input type="text" id="search-input" placeholder="np. ACME sp. z o.o. lub 1234567890">
+      </div>
+      <div class="filter-box">
+        <label for="filter-status">Status</label>
+        <select id="filter-status">
+          <option value="all">Wszystkie</option>
+          <option value="paid">Opłacone</option>
+          <option value="unpaid">Nieopłacone</option>
+        </select>
+      </div>
+      <div class="filter-box">
+        <label for="sort-select">Sortowanie</label>
+        <select id="sort-select">
+          <option value="newest">Najnowsze</option>
+          <option value="oldest">Najstarsze</option>
+          <option value="due-soonest">Najbliższy termin płatności</option>
+        </select>
       </div>
       <button id="btn-open-add" class="btn btn-primary">+ Dodaj fakturę</button>
     </section>

@@ -2,9 +2,9 @@
 // KONFIGURACJA SUPABASE
 // =========================================================================
 // TODO: uzupelnic przed wdrozeniem
-const SUPABASE_URL = "https://ncjttizrnukovuotrowp.supabase.co";
+const SUPABASE_URL = "TODO_SUPABASE_URL";
 // TODO: uzupelnic przed wdrozeniem
-const SUPABASE_ANON_KEY = "sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w";
+const SUPABASE_ANON_KEY = "TODO_SUPABASE_ANON_KEY";
 
 // Inicjalizacja klienta Supabase (biblioteka wgrana z CDN w index.html)
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -12,7 +12,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const TABLE_NAME = "invoices";
 
 // Stan aplikacji
-let allInvoices = [];
+let allInvoices = []; // pelny zbior faktur pobrany z bazy (niefiltrowany)
 let currentEditInvoiceId = null;
 let currentDueDateInvoiceId = null;
 let pendingConfirmAction = null;
@@ -22,6 +22,8 @@ let pendingConfirmAction = null;
 // =========================================================================
 const globalStatusEl = document.getElementById("global-status");
 const searchInputEl = document.getElementById("search-input");
+const filterStatusEl = document.getElementById("filter-status");
+const sortSelectEl = document.getElementById("sort-select");
 const tbodyEl = document.getElementById("invoices-tbody");
 
 const invoiceFormModal = document.getElementById("invoice-form-modal");
@@ -198,7 +200,7 @@ function validateInvoiceForm(data) {
 // FUNKCJE CRUD - SUPABASE
 // =========================================================================
 
-// Pobiera wszystkie faktury z bazy i renderuje tabele.
+// Pobiera wszystkie faktury z bazy, zapisuje w allInvoices i odswieza widok (po filtrach/sortowaniu).
 async function fetchInvoices() {
   showLoading("Wczytywanie faktur...");
   try {
@@ -206,13 +208,12 @@ async function fetchInvoices() {
       .from(TABLE_NAME)
       .select(
         "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid"
-      )
-      .order("issue_date", { ascending: false });
+      );
 
     if (error) throw error;
 
     allInvoices = data || [];
-    renderTable(allInvoices);
+    applyFiltersAndRender();
     clearStatus();
   } catch (err) {
     console.error(err);
@@ -220,31 +221,38 @@ async function fetchInvoices() {
   }
 }
 
-// Wyszukiwanie faktur po sprzedawcy lub NIP (zapytanie ilike do Supabase).
-async function searchInvoices(term) {
-  if (!term) {
-    await fetchInvoices();
-    return;
-  }
-  showLoading("Wyszukiwanie...");
-  try {
-    const { data, error } = await supabaseClient
-      .from(TABLE_NAME)
-      .select(
-        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid"
-      )
-      .or(`seller_name.ilike.%${term}%,seller_nip.ilike.%${term}%`)
-      .order("issue_date", { ascending: false });
+// Filtrowanie po sprzedawcy/NIP (search), po statusie platnosci oraz sortowanie - wszystko po stronie klienta
+// na juz wczytanym zbiorze allInvoices. Wynik przekazywany do renderTable().
+function applyFiltersAndRender() {
+  const term = searchInputEl.value.trim().toLowerCase();
+  const statusFilter = filterStatusEl.value;
+  const sortMode = sortSelectEl.value;
 
-    if (error) throw error;
+  let list = [...allInvoices];
 
-    allInvoices = data || [];
-    renderTable(allInvoices);
-    clearStatus();
-  } catch (err) {
-    console.error(err);
-    showError("Nie udało się wyszukać faktur — sprawdź połączenie.");
+  if (term) {
+    list = list.filter((inv) => {
+      const seller = (inv.seller_name || "").toLowerCase();
+      const nip = (inv.seller_nip || "").toLowerCase();
+      return seller.includes(term) || nip.includes(term);
+    });
   }
+
+  if (statusFilter === "paid") {
+    list = list.filter((inv) => inv.paid === true);
+  } else if (statusFilter === "unpaid") {
+    list = list.filter((inv) => inv.paid !== true);
+  }
+
+  if (sortMode === "newest") {
+    list.sort((a, b) => (b.issue_date || "").localeCompare(a.issue_date || ""));
+  } else if (sortMode === "oldest") {
+    list.sort((a, b) => (a.issue_date || "").localeCompare(b.issue_date || ""));
+  } else if (sortMode === "due-soonest") {
+    list.sort((a, b) => (a.due_date || "9999-99-99").localeCompare(b.due_date || "9999-99-99"));
+  }
+
+  renderTable(list);
 }
 
 // Dodaje nowa fakture do bazy (INSERT).
@@ -364,16 +372,11 @@ function escapeHtml(str) {
 }
 
 // =========================================================================
-// OBSLUGA WYSZUKIWANIA
+// OBSLUGA WYSZUKIWANIA, FILTROWANIA I SORTOWANIA
 // =========================================================================
-let searchDebounceTimer = null;
-searchInputEl.addEventListener("input", (e) => {
-  clearTimeout(searchDebounceTimer);
-  const term = e.target.value.trim();
-  searchDebounceTimer = setTimeout(() => {
-    searchInvoices(term);
-  }, 350);
-});
+searchInputEl.addEventListener("input", applyFiltersAndRender);
+filterStatusEl.addEventListener("change", applyFiltersAndRender);
+sortSelectEl.addEventListener("change", applyFiltersAndRender);
 
 // =========================================================================
 // OBSLUGA MODALA DODAJ/EDYTUJ FAKTURE
