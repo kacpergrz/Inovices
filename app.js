@@ -2,9 +2,9 @@
 // KONFIGURACJA SUPABASE
 // =========================================================================
 // TODO: uzupelnic przed wdrozeniem
-const SUPABASE_URL = "TODO_SUPABASE_URL";
+const SUPABASE_URL = "https://ncjttizrnukovuotrowp.supabase.co";
 // TODO: uzupelnic przed wdrozeniem
-const SUPABASE_ANON_KEY = "TODO_SUPABASE_ANON_KEY";
+const SUPABASE_ANON_KEY = "sb_publishable_wtxfaXXPywMenu46Ea5KHQ_n33G9u4w";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
