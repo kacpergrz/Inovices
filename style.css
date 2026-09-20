@@ -32,12 +32,35 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing);
+  flex-wrap: wrap;
 }
 
 .app-header h1 {
   margin: 0;
   font-size: 1.5rem;
   color: var(--color-primary-dark);
+}
+
+.main-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.nav-btn.active {
+  background-color: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
 }
 
 .container {
@@ -299,6 +322,118 @@ body {
   margin-top: 8px;
 }
 
+/* ===== ZAKLADKA WYNIKI ===== */
+.sub-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--spacing);
+}
+
+.sub-tab-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sub-tab-btn.active {
+  background-color: var(--color-primary-dark);
+  color: #fff;
+  border-color: var(--color-primary-dark);
+}
+
+.sub-panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing);
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing);
+  align-items: flex-end;
+  margin-bottom: var(--spacing);
+}
+
+.result-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+.result-card {
+  flex: 1;
+  min-width: 180px;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: center;
+}
+
+.result-card .result-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.result-card .result-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.result-value.positive {
+  color: var(--color-success);
+}
+
+.result-value.negative {
+  color: var(--color-danger);
+}
+
+.category-table, .comparison-table, .trips-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.category-table th, .category-table td,
+.comparison-table th, .comparison-table td,
+.trips-table th, .trips-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.category-table th, .comparison-table th, .trips-table th {
+  background-color: #eef2f7;
+  color: var(--color-text-muted);
+}
+
+.comparison-table tr.total-row td {
+  font-weight: 700;
+  background-color: var(--color-bg);
+}
+
+.currency-note {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 8px;
+}
+
+.empty-note {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
 /* Responsywnosc - widok kart na mobile */
 @media (max-width: 720px) {
   .container {
@@ -312,6 +447,11 @@ body {
 
   .toolbar .btn-primary {
     margin-left: 0;
+  }
+
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .invoices-table thead {
@@ -353,5 +493,13 @@ body {
 
   .modal-box {
     padding: 16px;
+  }
+
+  .result-cards {
+    flex-direction: column;
+  }
+
+  .comparison-table, .category-table, .trips-table {
+    font-size: 0.8rem;
   }
 }

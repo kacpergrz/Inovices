@@ -8,7 +8,11 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>Faktury</h1>
+    <h1>Faktury i Wyniki</h1>
+    <nav class="main-nav hidden" id="main-nav">
+      <button type="button" class="nav-btn active" id="nav-faktury" data-target="app-view">Faktury</button>
+      <button type="button" class="nav-btn" id="nav-wyniki" data-target="results-view">Wyniki</button>
+    </nav>
     <button id="btn-logout" class="btn btn-secondary btn-small hidden">Wyloguj</button>
   </header>
 
@@ -85,6 +89,78 @@
           <!-- Wiersze generowane przez app.js -->
         </tbody>
       </table>
+    </section>
+  </main>
+
+  <!-- WIDOK WYNIKI (pojazdy / kierowcy) -->
+  <main class="container hidden" id="results-view">
+    <div id="results-status" class="status-bar" aria-live="polite"></div>
+
+    <section class="sub-tabs">
+      <button type="button" class="sub-tab-btn active" data-subtarget="sub-wynik-pojazdu">Wynik pojazdu</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-wyplata">Wypłata kierowcy</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-podsumowanie-pojazdu">Podsumowanie pojazdu</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-porownanie">Porównanie pojazdów</button>
+    </section>
+
+    <!-- WYNIK POJAZDU -->
+    <section class="sub-panel" id="sub-wynik-pojazdu">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="wp-vehicle-select">Pojazd</label>
+          <select id="wp-vehicle-select"></select>
+        </div>
+        <div class="filter-box">
+          <label for="wp-month-select">Miesiąc</label>
+          <select id="wp-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-wp">Pokaż wynik</button>
+      </div>
+      <div id="wp-result"></div>
+    </section>
+
+    <!-- WYPLATA KIEROWCY -->
+    <section class="sub-panel hidden" id="sub-wyplata">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="wy-driver-select">Kierowca</label>
+          <select id="wy-driver-select"></select>
+        </div>
+        <div class="filter-box">
+          <label for="wy-month-select">Miesiąc</label>
+          <select id="wy-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-wy">Pokaż wypłatę</button>
+      </div>
+      <div id="wy-result"></div>
+    </section>
+
+    <!-- PODSUMOWANIE POJAZDU -->
+    <section class="sub-panel hidden" id="sub-podsumowanie-pojazdu">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="pp-vehicle-select">Pojazd</label>
+          <select id="pp-vehicle-select"></select>
+        </div>
+        <div class="filter-box">
+          <label for="pp-month-select">Miesiąc</label>
+          <select id="pp-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-pp">Pokaż podsumowanie</button>
+      </div>
+      <div id="pp-result"></div>
+    </section>
+
+    <!-- POROWNANIE POJAZDOW -->
+    <section class="sub-panel hidden" id="sub-porownanie">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="por-month-select">Miesiąc</label>
+          <select id="por-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-por">Pokaż porównanie</button>
+      </div>
+      <div id="por-result"></div>
     </section>
   </main>
 
