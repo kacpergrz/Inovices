@@ -153,6 +153,10 @@
     .file-meta { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-surface-2); border-radius: var(--radius-md); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); }
     .file-meta strong { font-size: var(--text-sm); }
 
+    .view-tabs { display:flex; gap:var(--space-2); flex-wrap:wrap; }
+    #rulesView { display:none; grid-template-columns:1fr; }
+    .rules-actions { display:flex; gap:var(--space-3); flex-wrap:wrap; align-items:center; }
+    .rule-status { min-height:1.2em; font-size:var(--text-sm); }
     /* WERSJA MOBILNA - ZMIANA TABELI NA KARTY */
     @media (max-width: 980px) { 
       .layout { grid-template-columns: 1fr; } 
@@ -162,15 +166,12 @@
       body { padding: var(--space-3); }
       .search-controls { flex-direction: column; }
       .search-controls input, .search-controls select { max-width: 100%; width: 100%; } 
-      .stats { grid-template-columns: 1fr; } /* Statystyki pod sobą na małym ekranie */
+      .stats { grid-template-columns: 1fr; }
 
-      /* Magia CSS: Tabela zamienia się w Listę Kart */
       table, thead, tbody, th, td, tr { display: block; }
       
-      /* Ukrywamy oryginalne nagłówki tabeli */
       thead tr { position: absolute; top: -9999px; left: -9999px; }
       
-      /* Każdy wiersz staje się kartą */
       tr { 
         background: var(--color-surface-2);
         border: 1px solid var(--color-border); 
@@ -180,7 +181,6 @@
         box-shadow: var(--shadow-sm);
       }
       
-      /* Komórki stają się rzędami wewnątrz karty */
       td { 
         border: none;
         border-bottom: 1px solid var(--color-divider); 
@@ -196,7 +196,6 @@
       
       td:last-child { border-bottom: none; }
       
-      /* Etykiety pobierane z atrybutu data-label (dodane w JavaScript) */
       td::before { 
         content: attr(data-label); 
         position: absolute; 
@@ -215,7 +214,6 @@
 </head>
 <body>
 
-  <!-- EKRAN LOGOWANIA -->
   <div id="authContainer" class="auth-wrapper">
     <div class="auth-panel">
       <svg class="logo" viewBox="0 0 64 64" aria-label="Logo panelu faktur" role="img" fill="none">
@@ -241,7 +239,6 @@
     </div>
   </div>
 
-  <!-- GŁÓWNA APLIKACJA -->
   <div id="appContainer" class="app">
     <header class="topbar">
       <div class="brand">
@@ -257,13 +254,13 @@
         </div>
       </div>
       <div style="display:flex; gap: 10px;">
+        <nav class="view-tabs" aria-label="Menu panelu"><button id="tabInvoicesBtn" class="primary-btn" type="button">Faktury</button><button id="tabRulesBtn" class="ghost-btn" type="button">Reguły</button></nav>
         <button class="theme-toggle" type="button" data-theme-toggle>Motyw</button>
         <button id="logoutBtn" class="danger-btn" type="button">Wyloguj</button>
       </div>
     </header>
 
-    <main class="layout">
-      <!-- PANEL DODAWANIA -->
+    <main class="layout" id="invoicesView">
       <section class="panel">
         <div class="panel-header">
           <h2>Formularz faktury</h2>
@@ -305,7 +302,6 @@
         </div>
       </section>
 
-      <!-- PANEL LISTY -->
       <section class="panel">
         <div class="panel-header">
           <div class="searchbar">
@@ -359,22 +355,48 @@
         </div>
       </section>
     </main>
-  </div>
 
-  <!-- SKRYPTY -->
+    <main class="layout" id="rulesView">
+      <section class="panel">
+        <div class="panel-header"><h2>Domyślne terminy płatności</h2><p class="muted">Stosowane tylko, gdy faktura z KSeF nie ma własnego terminu. Reguła dla NIP ma pierwszeństwo przed „default”.</p></div>
+        <form class="panel-body" id="paymentRuleForm">
+          <div class="field"><label for="paymentRuleKey">NIP sprzedawcy lub default</label><input id="paymentRuleKey" type="text" required placeholder="default albo 10 cyfr NIP" /></div>
+          <div class="field"><label for="paymentRuleDays">Dni od wystawienia</label><input id="paymentRuleDays" type="number" required min="0" max="365" step="1" /></div>
+          <div class="rules-actions"><button class="primary-btn" type="submit">Zapisz termin</button><span class="rule-status" id="paymentRuleStatus" role="status"></span></div>
+          <div class="table-wrap"><table><thead><tr><th>Klucz</th><th>Dni</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="paymentRuleRows"></tbody></table></div>
+        </form>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><h2>Przypisanie pojazdu po NIP</h2><p class="muted">Dotyczy nowych faktur pobranych przez WhatsApp. Starsze przypisania pozostają bez zmian.</p></div>
+        <form class="panel-body" id="vehicleRuleForm">
+          <div class="field"><label for="vehicleRuleNip">NIP sprzedawcy</label><input id="vehicleRuleNip" type="text" inputmode="numeric" required maxlength="10" placeholder="10 cyfr" /></div>
+          <div class="field"><label for="vehicleRulePlate">Aktywny pojazd</label><select id="vehicleRulePlate" required><option value="">Wybierz pojazd</option></select></div>
+          <div class="rules-actions"><button class="primary-btn" type="submit">Zapisz przypisanie</button><span class="rule-status" id="vehicleRuleStatus" role="status"></span></div>
+          <div class="table-wrap"><table><thead><tr><th>NIP</th><th>Pojazd</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="vehicleRuleRows"></tbody></table></div>
+        </form>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><h2>VAT raportu E100</h2><p class="muted">Podaj dzielnik brutto → netto: 1,23 oznacza VAT 23%, 1 oznacza brak VAT. „_default” dotyczy krajów bez własnej reguły.</p></div>
+        <form class="panel-body" id="vatRuleForm">
+          <div class="field"><label for="vatRuleCountry">Kraj (2 litery) albo _default</label><input id="vatRuleCountry" type="text" required placeholder="PL" /></div>
+          <div class="field"><label for="vatRuleFuel">Dzielnik: paliwo</label><input id="vatRuleFuel" type="number" required step="0.01" min="1" max="2" /></div>
+          <div class="field"><label for="vatRuleToll">Dzielnik: myto</label><input id="vatRuleToll" type="number" required step="0.01" min="1" max="2" /></div>
+          <div class="rules-actions"><button class="primary-btn" type="submit">Zapisz VAT</button><span class="rule-status" id="vatRuleStatus" role="status"></span></div>
+          <div class="table-wrap"><table><thead><tr><th>Kraj</th><th>Paliwo</th><th>Myto</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="vatRuleRows"></tbody></table></div>
+        </form>
+      </section>
+    </main>
+  </div>
+  
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-    // ==========================================
-    // TUTAJ WKLEJ NOWY KLUCZ Z SUPABASE!
-    // ==========================================
-    const SUPABASE_URL = '';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5janR0aXpybnVrb3Z1b3Ryb3dwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTQ1ODIzMiwiZXhwIjoyMDk1MDM0MjMyfQ.RByB0UOclNuremc2Ubq0fx1URLRJKye5Howgc07bhis';
+    const SUPABASE_URL = 'https://ncjttizrnukovuotrowp.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_hlZffOls0AOUJzMZHyhtQg_s5PNjxuJ';
     const STORAGE_BUCKET = 'invoice-files';
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- ELEMENTY LOGOWANIA ---
     const authContainer = document.getElementById('authContainer');
     const appContainer = document.getElementById('appContainer');
     const emailInput = document.getElementById('emailInput');
@@ -383,7 +405,6 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const loginErrorMsg = document.getElementById('loginErrorMsg');
 
-    // --- ELEMENTY APLIKACJI ---
     const invoiceNum = document.getElementById('invoiceNum');
     const issueDate = document.getElementById('issueDate');
     const paymentDays = document.getElementById('paymentDays');
@@ -408,7 +429,6 @@
     let editingPdfName = null;
     let currentTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
-    // --- OBSŁUGA LOGOWANIA ---
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) showApp(); else showLogin();
     });
@@ -431,7 +451,6 @@
     function showApp() { authContainer.style.display = 'none'; appContainer.style.display = 'grid'; renderTable(); }
     function showLogin() { authContainer.style.display = 'flex'; appContainer.style.display = 'none'; emailInput.value = ''; passwordInput.value = ''; }
 
-    // --- RESZTA LOGIKI APLIKACJI ---
     function setTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
       themeToggle.textContent = theme === 'dark' ? 'Jasny motyw' : 'Ciemny motyw';
@@ -577,7 +596,6 @@
       if (!filtered.length) { invoiceList.innerHTML = ''; emptyState.style.display = 'block'; return; }
       emptyState.style.display = 'none';
 
-      // KLUCZOWE: Dodano "data-label" do każdej komórki <td>, co pozwala na generowanie kart na urządzeniach mobilnych
       invoiceList.innerHTML = filtered.map(f => {
         const dueInfo = getDaysUntilDue(f.due_date);
         return `
@@ -614,6 +632,163 @@
     window.addInvoice = addInvoice; window.editInvoice = editInvoice;
     window.togglePaid = togglePaid; window.deleteInvoice = deleteInvoice;
     window.clearForm = clearForm; window.openPdfPreview = openPdfPreview;
+
+    // Reguły: korzystają z istniejącej sesji Auth i klienta Supabase.
+    const invoicesView = document.getElementById('invoicesView');
+    const rulesView = document.getElementById('rulesView');
+    const tabInvoicesBtn = document.getElementById('tabInvoicesBtn');
+    const tabRulesBtn = document.getElementById('tabRulesBtn');
+    let rulesById = new Map();
+    let activeVehicles = [];
+
+    function selectView(view) {
+      const showingRules = view === 'rules';
+      invoicesView.style.display = showingRules ? 'none' : 'grid';
+      rulesView.style.display = showingRules ? 'grid' : 'none';
+      tabInvoicesBtn.className = showingRules ? 'ghost-btn' : 'primary-btn';
+      tabRulesBtn.className = showingRules ? 'primary-btn' : 'ghost-btn';
+      if (showingRules) refreshRules();
+    }
+    tabInvoicesBtn.addEventListener('click', () => selectView('invoices'));
+    tabRulesBtn.addEventListener('click', () => selectView('rules'));
+
+    function ruleStatus(id, text, isError = false) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.style.color = isError ? 'var(--color-error)' : 'var(--color-success)';
+    }
+    function validateNip(raw) {
+      const nip = String(raw).replace(/\D/g, '');
+      if (!/^\d{10}$/.test(nip)) throw new Error('NIP musi mieć dokładnie 10 cyfr.');
+      return nip;
+    }
+    async function refreshRules() {
+      const [{ data: rules, error: rulesError }, { data: vehicles, error: vehiclesError }] = await Promise.all([
+        supabase.from('rules').select('id,category,key,value,active').order('key'),
+        supabase.from('vehicles').select('name,plate').eq('active', true).order('name')
+      ]);
+      if (rulesError || vehiclesError) {
+        ruleStatus('paymentRuleStatus', (rulesError || vehiclesError).message, true);
+        return;
+      }
+      rulesById = new Map((rules || []).map(r => [String(r.id), r]));
+      activeVehicles = vehicles || [];
+      const plateSelect = document.getElementById('vehicleRulePlate');
+      plateSelect.replaceChildren(new Option('Wybierz pojazd', ''));
+      for (const v of activeVehicles) plateSelect.add(new Option(`${v.name} (${v.plate})`, v.plate));
+
+      for (const [category, tbodyId] of [
+        ['payment_terms_default', 'paymentRuleRows'],
+        ['vehicle_by_nip', 'vehicleRuleRows'],
+        ['vat_rate', 'vatRuleRows']
+      ]) {
+        const tbody = document.getElementById(tbodyId);
+        tbody.replaceChildren();
+        for (const rule of (rules || []).filter(r => r.category === category)) {
+          const tr = document.createElement('tr');
+          const values = category === 'vat_rate'
+            ? [rule.key, rule.value?.paliwo_vat, rule.value?.myto_vat]
+            : [rule.key, category === 'payment_terms_default' ? rule.value?.days : rule.value?.vehicle];
+          const labels = category === 'vat_rate' ? ['Kraj','Paliwo','Myto'] :
+            category === 'vehicle_by_nip' ? ['NIP','Pojazd'] : ['Klucz','Dni'];
+          values.forEach((value, i) => {
+            const td = document.createElement('td');
+            td.dataset.label = labels[i];
+            td.textContent = String(value ?? '—');
+            tr.append(td);
+          });
+          const state = document.createElement('td');
+          state.dataset.label = 'Stan';
+          state.textContent = rule.active ? 'Aktywna' : 'Wyłączona';
+          tr.append(state);
+          const action = document.createElement('td');
+          action.dataset.label = 'Akcje';
+          action.className = 'actions';
+          const edit = document.createElement('button');
+          edit.type = 'button'; edit.className = 'small-btn'; edit.textContent = 'Edytuj';
+          edit.dataset.ruleAction = 'edit'; edit.dataset.ruleId = String(rule.id);
+          const toggle = document.createElement('button');
+          toggle.type = 'button'; toggle.className = 'ghost-btn';
+          toggle.textContent = rule.active ? 'Wyłącz' : 'Włącz';
+          toggle.dataset.ruleAction = 'toggle'; toggle.dataset.ruleId = String(rule.id);
+          action.append(edit, toggle);
+          tr.append(action);
+          tbody.append(tr);
+        }
+      }
+    }
+    rulesView.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-rule-action]');
+      if (!button) return;
+      const rule = rulesById.get(button.dataset.ruleId);
+      if (!rule) return;
+      if (button.dataset.ruleAction === 'edit') {
+        if (rule.category === 'payment_terms_default') {
+          document.getElementById('paymentRuleKey').value = rule.key;
+          document.getElementById('paymentRuleDays').value = rule.value?.days ?? '';
+        } else if (rule.category === 'vehicle_by_nip') {
+          document.getElementById('vehicleRuleNip').value = rule.key;
+          document.getElementById('vehicleRulePlate').value = rule.value?.vehicle ?? '';
+        } else if (rule.category === 'vat_rate') {
+          document.getElementById('vatRuleCountry').value = rule.key;
+          document.getElementById('vatRuleFuel').value = rule.value?.paliwo_vat ?? '';
+          document.getElementById('vatRuleToll').value = rule.value?.myto_vat ?? '';
+        }
+        rulesView.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+      button.disabled = true;
+      const { error } = await supabase.from('rules')
+        .update({ active: !rule.active, updated_at: new Date().toISOString() })
+        .eq('id', rule.id);
+      button.disabled = false;
+      if (error) alert(`Nie zapisano zmiany: ${error.message}`);
+      else await refreshRules();
+    });
+    async function saveRule(category, key, value, statusId) {
+      ruleStatus(statusId, 'Zapisywanie…');
+      const existing = [...rulesById.values()].find(r => r.category === category && r.key === key);
+      const payload = { category, key, value, active: true, updated_at: new Date().toISOString() };
+      const query = existing
+        ? supabase.from('rules').update(payload).eq('id', existing.id)
+        : supabase.from('rules').insert(payload);
+      const { error } = await query;
+      if (error) { ruleStatus(statusId, error.message, true); return; }
+      ruleStatus(statusId, 'Zapisano');
+      await refreshRules();
+    }
+    document.getElementById('paymentRuleForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const rawKey = document.getElementById('paymentRuleKey').value.trim();
+        const key = rawKey.toLowerCase() === 'default' ? 'default' : validateNip(rawKey);
+        const days = Number(document.getElementById('paymentRuleDays').value);
+        if (!Number.isInteger(days) || days < 0 || days > 365) throw new Error('Podaj od 0 do 365 pełnych dni.');
+        await saveRule('payment_terms_default', key, { days }, 'paymentRuleStatus');
+      } catch (err) { ruleStatus('paymentRuleStatus', err.message, true); }
+    });
+    document.getElementById('vehicleRuleForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const key = validateNip(document.getElementById('vehicleRuleNip').value);
+        const vehicle = document.getElementById('vehicleRulePlate').value;
+        if (!activeVehicles.some(v => v.plate === vehicle)) throw new Error('Wybierz aktywny pojazd.');
+        await saveRule('vehicle_by_nip', key, { vehicle }, 'vehicleRuleStatus');
+      } catch (err) { ruleStatus('vehicleRuleStatus', err.message, true); }
+    });
+    document.getElementById('vatRuleForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const key = document.getElementById('vatRuleCountry').value.trim().toUpperCase();
+        if (key !== '_DEFAULT' && !/^[A-Z]{2}$/.test(key)) throw new Error('Podaj dwuliterowy kod kraju albo _default.');
+        const fuel = Number(document.getElementById('vatRuleFuel').value);
+        const toll = Number(document.getElementById('vatRuleToll').value);
+        if (![fuel, toll].every(n => Number.isFinite(n) && n >= 1 && n <= 2)) throw new Error('Dzielnik VAT: od 1 do 2.');
+        await saveRule('vat_rate', key === '_DEFAULT' ? '_default' : key,
+          { paliwo_vat: fuel, myto_vat: toll }, 'vatRuleStatus');
+      } catch (err) { ruleStatus('vatRuleStatus', err.message, true); }
+    });
   </script>
+  <script type="module" src="./finance-module.js"></script>
 </body>
 </html>
