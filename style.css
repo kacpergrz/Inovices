@@ -503,3 +503,17 @@ body {
     font-size: 0.8rem;
   }
 }
+
+/* Reguły — układ zgodny z panelem Faktury i Wyniki */
+.rules-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.rules-card { min-width:0; background:var(--color-surface,#fff); border:1px solid var(--color-border,#e5e7eb); border-radius:var(--radius,12px); padding:16px; }
+.rules-card:last-child { grid-column:1/-1; }
+.rules-card h2 { margin:0 0 8px; }
+.rules-hint { color:var(--color-text-muted,#6b7280); margin:0 0 14px; }
+.rules-form { display:grid; gap:8px; margin-bottom:16px; }
+.rules-form label { font-weight:600; }
+.rules-form input,.rules-form select { width:100%; min-height:42px; padding:8px 10px; border:1px solid var(--color-border,#e5e7eb); border-radius:var(--radius,8px); background:var(--color-surface,#fff); color:inherit; }
+.rules-form button { justify-self:start; margin-top:6px; }
+.rules-card .table-wrapper { overflow-x:auto; }
+.rules-card .row-actions { display:flex; flex-wrap:wrap; gap:6px; }
+@media(max-width:800px) { .rules-grid { grid-template-columns:1fr; } .rules-card:last-child { grid-column:auto; } }
