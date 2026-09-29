@@ -12,6 +12,7 @@
     <nav class="main-nav hidden" id="main-nav">
       <button type="button" class="nav-btn active" id="nav-faktury" data-target="app-view">Faktury</button>
       <button type="button" class="nav-btn" id="nav-wyniki" data-target="results-view">Wyniki</button>
+      <button type="button" class="nav-btn" id="nav-reguly" data-target="rules-view">Reguły</button>
     </nav>
     <button id="btn-logout" class="btn btn-secondary btn-small hidden">Wyloguj</button>
   </header>
@@ -162,6 +163,51 @@
       </div>
       <div id="por-result"></div>
     </section>
+  </main>
+
+  <!-- WIDOK REGUŁ -->
+  <main class="container hidden" id="rules-view">
+    <div id="rules-status" class="status-bar" aria-live="polite"></div>
+    <div class="rules-grid">
+      <section class="rules-card">
+        <h2>Domyślne terminy płatności</h2>
+        <p class="rules-hint">NIP sprzedawcy ma pierwszeństwo przed regułą default. Dotyczy nowych faktur pobieranych z KSeF, gdy brak terminu.</p>
+        <form id="payment-rule-form" class="rules-form">
+          <label for="payment-rule-key">NIP sprzedawcy lub default</label>
+          <input id="payment-rule-key" type="text" required placeholder="default lub 10 cyfr NIP">
+          <label for="payment-rule-days">Liczba dni od wystawienia</label>
+          <input id="payment-rule-days" type="number" min="0" max="365" step="1" required>
+          <button class="btn btn-primary" type="submit">Zapisz termin</button>
+        </form>
+        <div class="table-wrapper"><table class="invoices-table"><thead><tr><th>Klucz</th><th>Dni</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="payment-rules-tbody"></tbody></table></div>
+      </section>
+      <section class="rules-card">
+        <h2>Pojazd po NIP</h2>
+        <p class="rules-hint">Automatycznie przypisuje wyłącznie nowe faktury pobierane z KSeF.</p>
+        <form id="vehicle-rule-form" class="rules-form">
+          <label for="vehicle-rule-nip">NIP sprzedawcy</label>
+          <input id="vehicle-rule-nip" type="text" inputmode="numeric" maxlength="10" required placeholder="10 cyfr">
+          <label for="vehicle-rule-select">Aktywny pojazd</label>
+          <select id="vehicle-rule-select" required><option value="">Wybierz pojazd</option></select>
+          <button class="btn btn-primary" type="submit">Zapisz przypisanie</button>
+        </form>
+        <div class="table-wrapper"><table class="invoices-table"><thead><tr><th>NIP</th><th>Pojazd</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="vehicle-rules-tbody"></tbody></table></div>
+      </section>
+      <section class="rules-card">
+        <h2>VAT raportu E100</h2>
+        <p class="rules-hint">Dzielnik brutto → netto: 1.23 to 23% VAT, 1.00 to brak VAT. _default dotyczy krajów bez własnej reguły.</p>
+        <form id="vat-rule-form" class="rules-form">
+          <label for="vat-rule-country">Kraj (np. PL) albo _default</label>
+          <input id="vat-rule-country" type="text" required placeholder="PL">
+          <label for="vat-rule-fuel">Dzielnik paliwa</label>
+          <input id="vat-rule-fuel" type="number" min="1" max="2" step="0.01" required placeholder="1.23">
+          <label for="vat-rule-toll">Dzielnik myta</label>
+          <input id="vat-rule-toll" type="number" min="1" max="2" step="0.01" required placeholder="1.00">
+          <button class="btn btn-primary" type="submit">Zapisz VAT</button>
+        </form>
+        <div class="table-wrapper"><table class="invoices-table"><thead><tr><th>Kraj</th><th>Paliwo</th><th>Myto</th><th>Stan</th><th>Akcje</th></tr></thead><tbody id="vat-rules-tbody"></tbody></table></div>
+      </section>
+    </div>
   </main>
 
   <!-- MODAL: Dodaj / Edytuj faktura -->
