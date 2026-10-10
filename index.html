@@ -58,6 +58,14 @@
         </select>
       </div>
       <div class="filter-box">
+        <label for="filter-vehicle">Pojazd</label>
+        <select id="filter-vehicle">
+          <option value="all">Wszystkie</option>
+          <option value="unassigned">Nieprzypisane</option>
+          <option value="shared">Wspólne dla firmy</option>
+        </select>
+      </div>
+      <div class="filter-box">
         <label for="sort-select">Sortowanie</label>
         <select id="sort-select">
           <option value="newest">Najnowsze</option>
@@ -83,6 +91,7 @@
             <th>Brutto</th>
             <th>Waluta</th>
             <th>Status</th>
+            <th>Pojazd</th>
             <th>Akcje</th>
           </tr>
         </thead>
@@ -285,6 +294,14 @@
           </select>
         </div>
 
+        <div class="form-row">
+          <label for="f-vehicle">Przypisany pojazd</label>
+          <select id="f-vehicle">
+            <option value="unassigned">Nieprzypisany</option>
+            <option value="shared">Wspólne dla firmy</option>
+          </select>
+        </div>
+
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Zapisz</button>
           <button type="button" class="btn btn-secondary" id="btn-cancel-form">Anuluj</button>
@@ -331,6 +348,29 @@
       <div class="form-actions">
         <button type="button" class="btn btn-primary" id="btn-save-due-date">Zapisz</button>
         <button type="button" class="btn btn-secondary" id="btn-cancel-due-date">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Przypisz pojazd -->
+  <div id="vehicle-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Przypisz pojazd</h2>
+      <p id="vehicle-modal-invoice-label" class="nbp-preview"></p>
+
+      <div class="form-row">
+        <label for="modal-vehicle-select">Wybierz pojazd lub przypisanie</label>
+        <select id="modal-vehicle-select">
+          <option value="unassigned">Nieprzypisany</option>
+          <option value="shared">Wspólne dla firmy</option>
+        </select>
+      </div>
+
+      <span class="error-msg" id="err-vehicle-modal"></span>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-save-vehicle">Zapisz</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-vehicle">Anuluj</button>
       </div>
     </div>
   </div>

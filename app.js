@@ -11,8 +11,10 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const TABLE_NAME = "invoices";
 
 let allInvoices = [];
+let allVehicles = [];
 let currentEditInvoiceId = null;
 let currentDueDateInvoiceId = null;
+let currentVehicleInvoiceId = null;
 let pendingConfirmAction = null;
 
 // =========================================================================
@@ -21,17 +23,26 @@ let pendingConfirmAction = null;
 const globalStatusEl = document.getElementById("global-status");
 const searchInputEl = document.getElementById("search-input");
 const filterStatusEl = document.getElementById("filter-status");
+const filterVehicleEl = document.getElementById("filter-vehicle");
 const sortSelectEl = document.getElementById("sort-select");
 const tbodyEl = document.getElementById("invoices-tbody");
 
 const invoiceFormModal = document.getElementById("invoice-form-modal");
 const invoiceForm = document.getElementById("invoice-form");
 const invoiceFormTitle = document.getElementById("invoice-form-title");
+const fVehicleSelect = document.getElementById("f-vehicle");
 
 const confirmModal = document.getElementById("confirm-modal");
 const confirmModalText = document.getElementById("confirm-modal-text");
 
 const dueDateModal = document.getElementById("due-date-modal");
+
+const vehicleModal = document.getElementById("vehicle-modal");
+const vehicleModalInvoiceLabel = document.getElementById("vehicle-modal-invoice-label");
+const modalVehicleSelect = document.getElementById("modal-vehicle-select");
+const errVehicleModal = document.getElementById("err-vehicle-modal");
+const btnSaveVehicle = document.getElementById("btn-save-vehicle");
+const btnCancelVehicle = document.getElementById("btn-cancel-vehicle");
 
 const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
@@ -81,8 +92,8 @@ loginForm.addEventListener("submit", async (e) => {
     clearStatus();
     loginForm.reset();
     renderAuthState(data.session);
-    await fetchInvoices();
     await loadVehiclesAndDrivers();
+    await fetchInvoices();
   } catch (err) {
     console.error(err);
     clearStatus();
@@ -245,7 +256,7 @@ async function fetchInvoices() {
     const { data, error } = await supabaseClient
       .from(TABLE_NAME)
       .select(
-        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid"
+        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type"
       );
 
     if (error) throw error;
@@ -262,6 +273,7 @@ async function fetchInvoices() {
 function applyFiltersAndRender() {
   const term = searchInputEl.value.trim().toLowerCase();
   const statusFilter = filterStatusEl.value;
+  const vehicleFilter = filterVehicleEl ? filterVehicleEl.value : "all";
   const sortMode = sortSelectEl.value;
 
   let list = [...allInvoices];
@@ -278,6 +290,14 @@ function applyFiltersAndRender() {
     list = list.filter((inv) => inv.paid === true);
   } else if (statusFilter === "unpaid") {
     list = list.filter((inv) => inv.paid !== true);
+  }
+
+  if (vehicleFilter === "unassigned") {
+    list = list.filter((inv) => !inv.vehicle_id && inv.allocation_type !== "shared");
+  } else if (vehicleFilter === "shared") {
+    list = list.filter((inv) => inv.allocation_type === "shared");
+  } else if (vehicleFilter !== "all") {
+    list = list.filter((inv) => inv.allocation_type === "vehicle" && String(inv.vehicle_id) === String(vehicleFilter));
   }
 
   if (sortMode === "newest") {
@@ -351,15 +371,65 @@ async function setDueDate(id, dueDateValue, paymentDaysValue) {
   }
 }
 
+async function setInvoiceVehicle(id, allocationValue) {
+  showLoading("Zapisywanie przypisania pojazdu...");
+  try {
+    let vehicleId = null;
+    let allocationType = "unassigned";
+
+    if (allocationValue === "shared") {
+      allocationType = "shared";
+      vehicleId = null;
+    } else if (allocationValue && allocationValue !== "unassigned") {
+      allocationType = "vehicle";
+      vehicleId = Number(allocationValue);
+    }
+
+    const { error } = await supabaseClient
+      .from(TABLE_NAME)
+      .update({
+        vehicle_id: vehicleId,
+        allocation_type: allocationType,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+    clearStatus();
+    await fetchInvoices();
+    return true;
+  } catch (err) {
+    console.error(err);
+    showError("Nie udało się zapisać przypisania pojazdu — sprawdź połączenie.");
+    return false;
+  }
+}
+
 // =========================================================================
 // RENDEROWANIE TABELI FAKTUR
 // =========================================================================
+function renderVehicleBadge(invoice) {
+  if (invoice.allocation_type === "shared") {
+    return `<span class="badge badge-shared">Wspólne (firma)</span>`;
+  }
+  if (invoice.allocation_type === "vehicle" || invoice.vehicle_id) {
+    const v = allVehicles.find((veh) => String(veh.id) === String(invoice.vehicle_id));
+    if (v) {
+      return `<span class="badge badge-vehicle">${escapeHtml(v.name.toUpperCase())} (${escapeHtml(v.plate)})</span>`;
+    }
+    if (invoice.vehicle_id) {
+      return `<span class="badge badge-vehicle">Pojazd #${invoice.vehicle_id}</span>`;
+    }
+  }
+  return `<span class="badge badge-unassigned">Nieprzypisany</span>`;
+}
+
 function renderTable(invoices) {
   tbodyEl.innerHTML = "";
 
   if (!invoices.length) {
     const emptyRow = document.createElement("tr");
-    emptyRow.innerHTML = `<td colspan="11" style="text-align:center; color:#6b7280;">Brak faktur do wyświetlenia.</td>`;
+    emptyRow.innerHTML = `<td colspan="12" style="text-align:center; color:#6b7280;">Brak faktur do wyświetlenia.</td>`;
     tbodyEl.appendChild(emptyRow);
     return;
   }
@@ -382,8 +452,10 @@ function renderTable(invoices) {
       <td data-label="Brutto">${formatAmount(invoice.gross_amount, invoice.currency)}</td>
       <td data-label="Waluta">${escapeHtml(invoice.currency || "-")}</td>
       <td data-label="Status">${statusBadge}</td>
+      <td data-label="Pojazd">${renderVehicleBadge(invoice)}</td>
       <td data-label="Akcje">
         <div class="row-actions">
+          <button class="btn btn-secondary btn-small" data-action="set-vehicle" data-id="${invoice.id}">Pojazd</button>
           <button class="btn btn-secondary btn-small" data-action="edit" data-id="${invoice.id}">Edytuj</button>
           <button class="btn btn-secondary btn-small" data-action="toggle-status" data-id="${invoice.id}" data-paid="${invoice.paid}">
             ${invoice.paid ? "Oznacz jako nieopłaconą" : "Oznacz jako opłaconą"}
@@ -408,6 +480,7 @@ function escapeHtml(str) {
 // =========================================================================
 searchInputEl.addEventListener("input", applyFiltersAndRender);
 filterStatusEl.addEventListener("change", applyFiltersAndRender);
+if (filterVehicleEl) filterVehicleEl.addEventListener("change", applyFiltersAndRender);
 sortSelectEl.addEventListener("change", applyFiltersAndRender);
 
 // =========================================================================
@@ -434,6 +507,16 @@ function openInvoiceForm(invoice) {
   document.getElementById("f-gross-amount").value = invoice ? invoice.gross_amount || "" : "";
   document.getElementById("f-currency").value = invoice ? invoice.currency || "PLN" : "PLN";
   document.getElementById("f-paid").value = invoice ? String(!!invoice.paid) : "false";
+
+  if (fVehicleSelect) {
+    if (!invoice || (!invoice.vehicle_id && invoice.allocation_type !== "shared")) {
+      fVehicleSelect.value = "unassigned";
+    } else if (invoice.allocation_type === "shared") {
+      fVehicleSelect.value = "shared";
+    } else {
+      fVehicleSelect.value = String(invoice.vehicle_id);
+    }
+  }
 
   updateNbpPreview();
   invoiceFormModal.classList.remove("hidden");
@@ -464,6 +547,18 @@ invoiceForm.addEventListener("submit", (e) => {
 
   if (!validateInvoiceForm(formData)) return;
 
+  let vehicleId = null;
+  let allocationType = "unassigned";
+  if (fVehicleSelect) {
+    const selectedVehicle = fVehicleSelect.value;
+    if (selectedVehicle === "shared") {
+      allocationType = "shared";
+    } else if (selectedVehicle && selectedVehicle !== "unassigned") {
+      allocationType = "vehicle";
+      vehicleId = Number(selectedVehicle);
+    }
+  }
+
   const payload = {
     invoice_number: formData.invoice_number.trim(),
     ksef_number: formData.ksef_number ? formData.ksef_number.trim() : null,
@@ -474,7 +569,9 @@ invoiceForm.addEventListener("submit", (e) => {
     net_amount: Number(formData.net_amount),
     gross_amount: Number(formData.gross_amount),
     currency: formData.currency,
-    paid: formData.paid
+    paid: formData.paid,
+    vehicle_id: vehicleId,
+    allocation_type: allocationType
   };
 
   const isEdit = !!currentEditInvoiceId;
@@ -558,6 +655,8 @@ tbodyEl.addEventListener("click", (e) => {
 
   if (action === "edit") {
     openInvoiceForm(invoice);
+  } else if (action === "set-vehicle") {
+    openVehicleModal(invoice);
   } else if (action === "toggle-status") {
     const currentlyPaid = btn.dataset.paid === "true";
     const newStatus = !currentlyPaid;
@@ -638,6 +737,58 @@ document.getElementById("btn-save-due-date").addEventListener("click", () => {
   );
 });
 
+// =========================================================================
+// MODAL: PRZYPISZ POJAZD
+// =========================================================================
+function openVehicleModal(invoice) {
+  currentVehicleInvoiceId = invoice.id;
+  const seller = invoice.seller_name ? ` (${invoice.seller_name})` : "";
+  vehicleModalInvoiceLabel.textContent = `Faktura: ${invoice.invoice_number || "-"}${seller}`;
+  errVehicleModal.textContent = "";
+
+  if (invoice.allocation_type === "shared") {
+    modalVehicleSelect.value = "shared";
+  } else if (invoice.allocation_type === "vehicle" && invoice.vehicle_id) {
+    modalVehicleSelect.value = String(invoice.vehicle_id);
+  } else {
+    modalVehicleSelect.value = "unassigned";
+  }
+
+  vehicleModal.classList.remove("hidden");
+}
+
+function closeVehicleModal() {
+  vehicleModal.classList.add("hidden");
+  currentVehicleInvoiceId = null;
+  errVehicleModal.textContent = "";
+}
+
+btnCancelVehicle.addEventListener("click", closeVehicleModal);
+
+btnSaveVehicle.addEventListener("click", () => {
+  const invoice = allInvoices.find((inv) => String(inv.id) === String(currentVehicleInvoiceId));
+  if (!invoice) return;
+
+  const selectedValue = modalVehicleSelect.value;
+  let label = "Nieprzypisany";
+  if (selectedValue === "shared") {
+    label = "Wspólne dla firmy";
+  } else if (selectedValue !== "unassigned") {
+    const v = allVehicles.find((veh) => String(veh.id) === String(selectedValue));
+    label = v ? `${v.name.toUpperCase()} (${v.plate})` : `Pojazd #${selectedValue}`;
+  }
+
+  openConfirmModal(
+    `Przypisać fakturę ${invoice.invoice_number} do: ${label}?`,
+    async () => {
+      const success = await setInvoiceVehicle(invoice.id, selectedValue);
+      if (success) {
+        closeVehicleModal();
+      }
+    }
+  );
+});
+
 // =========================================================================================
 // ZAKLADKA WYNIKI - FUNKCJE WSPOLNE (replikuja logike bota WhatsApp z Supabase Edge Function)
 // =========================================================================================
@@ -677,7 +828,7 @@ function getMonthRange(month) {
   return { startOfMonth, endOfMonth };
 }
 
-// Wypelnia selecty pojazdow, kierowcow i miesiecy w zakladce Wyniki.
+// Wypelnia selecty pojazdow, kierowcow i miesiecy w zakladce Wyniki i Faktury.
 async function loadVehiclesAndDrivers() {
   const monthOptions = generateMonthOptions()
     .map((m) => `<option value="${m}">${m}</option>`)
@@ -694,11 +845,19 @@ async function loadVehiclesAndDrivers() {
       .order("name");
     if (vehError) throw vehError;
 
-    const vehicleOptions = (vehicles || [])
+    allVehicles = vehicles || [];
+
+    const vehicleOptions = allVehicles
       .map((v) => `<option value="${v.id}">${escapeHtml(v.name.toUpperCase())} (${escapeHtml(v.plate)})</option>`)
       .join("");
     document.getElementById("wp-vehicle-select").innerHTML = vehicleOptions;
     document.getElementById("pp-vehicle-select").innerHTML = vehicleOptions;
+
+    updateVehicleSelects();
+
+    if (allInvoices.length > 0) {
+      applyFiltersAndRender();
+    }
 
     const { data: drivers, error: drvError } = await supabaseClient
       .from("drivers")
@@ -714,6 +873,42 @@ async function loadVehiclesAndDrivers() {
   } catch (err) {
     console.error(err);
     showResultsError("Nie udało się wczytać listy pojazdów/kierowców — sprawdź połączenie.");
+  }
+}
+
+function updateVehicleSelects() {
+  const vehicleOptGroups = allVehicles.length
+    ? `<optgroup label="Aktywne pojazdy">${allVehicles
+        .map((v) => `<option value="${v.id}">🚛 ${escapeHtml(v.name.toUpperCase())} (${escapeHtml(v.plate)})</option>`)
+        .join("")}</optgroup>`
+    : "";
+
+  if (filterVehicleEl) {
+    const currentVal = filterVehicleEl.value;
+    filterVehicleEl.innerHTML = `
+      <option value="all">Wszystkie</option>
+      <option value="unassigned">Nieprzypisane</option>
+      <option value="shared">Wspólne dla firmy</option>
+      ${vehicleOptGroups}
+    `;
+    if (currentVal) filterVehicleEl.value = currentVal;
+  }
+
+  const assignmentOptions = `
+    <option value="unassigned">Nieprzypisany</option>
+    <option value="shared">Wspólne dla firmy</option>
+    ${vehicleOptGroups}
+  `;
+
+  if (modalVehicleSelect) {
+    const cur = modalVehicleSelect.value;
+    modalVehicleSelect.innerHTML = assignmentOptions;
+    if (cur) modalVehicleSelect.value = cur;
+  }
+  if (fVehicleSelect) {
+    const cur = fVehicleSelect.value;
+    fVehicleSelect.innerHTML = assignmentOptions;
+    if (cur) fVehicleSelect.value = cur;
   }
 }
 
@@ -1301,7 +1496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { data } = await supabaseClient.auth.getSession();
   renderAuthState(data.session);
   if (data.session) {
-    await fetchInvoices();
     await loadVehiclesAndDrivers();
+    await fetchInvoices();
   }
 });

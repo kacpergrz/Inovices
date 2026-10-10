@@ -200,7 +200,7 @@ body {
 .invoices-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 1040px;
 }
 
 .invoices-table th,
@@ -238,6 +238,21 @@ body {
 .badge-unpaid {
   background-color: var(--color-danger-bg);
   color: var(--color-danger);
+}
+
+.badge-vehicle {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.badge-shared {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-unassigned {
+  background-color: #f3f4f6;
+  color: #6b7280;
 }
 
 .row-actions {
