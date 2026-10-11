@@ -15,6 +15,7 @@ let allVehicles = [];
 let currentEditInvoiceId = null;
 let currentDueDateInvoiceId = null;
 let currentVehicleInvoiceId = null;
+let currentServiceMonthInvoiceId = null;
 let pendingConfirmAction = null;
 
 // =========================================================================
@@ -43,6 +44,14 @@ const modalVehicleSelect = document.getElementById("modal-vehicle-select");
 const errVehicleModal = document.getElementById("err-vehicle-modal");
 const btnSaveVehicle = document.getElementById("btn-save-vehicle");
 const btnCancelVehicle = document.getElementById("btn-cancel-vehicle");
+
+const serviceMonthModal = document.getElementById("service-month-modal");
+const serviceMonthModalInvoiceLabel = document.getElementById("service-month-modal-invoice-label");
+const modalServiceMonthSelect = document.getElementById("modal-service-month-select");
+const modalServiceMonthCustom = document.getElementById("modal-service-month-custom");
+const errServiceMonthModal = document.getElementById("err-service-month-modal");
+const btnSaveServiceMonth = document.getElementById("btn-save-service-month");
+const btnCancelServiceMonth = document.getElementById("btn-cancel-service-month");
 
 const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
@@ -243,6 +252,10 @@ function validateInvoiceForm(data) {
     setFieldError("gross-amount", "Kwota brutto musi być liczbą dodatnią (max. 2 miejsca po przecinku).");
     isValid = false;
   }
+  if (data.service_month && !/^\d{4}-\d{2}$/.test(data.service_month)) {
+    setFieldError("service-month", "Podaj poprawny miesiąc w formacie RRRR-MM (np. 2026-09).");
+    isValid = false;
+  }
 
   return isValid;
 }
@@ -256,7 +269,7 @@ async function fetchInvoices() {
     const { data, error } = await supabaseClient
       .from(TABLE_NAME)
       .select(
-        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type"
+        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month"
       );
 
     if (error) throw error;
@@ -405,6 +418,29 @@ async function setInvoiceVehicle(id, allocationValue) {
   }
 }
 
+async function setInvoiceServiceMonth(id, serviceMonthValue) {
+  showLoading("Zapisywanie miesiąca rozliczenia...");
+  try {
+    const formatted = serviceMonthValue ? String(serviceMonthValue).trim() : null;
+    const { error } = await supabaseClient
+      .from(TABLE_NAME)
+      .update({
+        service_month: formatted,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+    clearStatus();
+    await fetchInvoices();
+    return true;
+  } catch (err) {
+    console.error(err);
+    showError("Nie udało się zapisać miesiąca rozliczenia — sprawdź połączenie.");
+    return false;
+  }
+}
+
 // =========================================================================
 // RENDEROWANIE TABELI FAKTUR
 // =========================================================================
@@ -446,7 +482,7 @@ function renderTable(invoices) {
       <td data-label="Numer KSeF">${escapeHtml(invoice.ksef_number || "-")}</td>
       <td data-label="Sprzedawca">${escapeHtml(invoice.seller_name || "-")}</td>
       <td data-label="NIP">${escapeHtml(invoice.seller_nip || "-")}</td>
-      <td data-label="Data wystawienia">${invoice.issue_date || "-"}</td>
+      <td data-label="Data wystawienia">${invoice.issue_date || "-"}${invoice.service_month ? `<br><span class="badge badge-service-month" title="Przypisano do miesiąca: ${escapeHtml(invoice.service_month)}">Rozl.: ${escapeHtml(invoice.service_month)}</span>` : ""}</td>
       <td data-label="Termin płatności">${invoice.due_date || "-"}</td>
       <td data-label="Netto">${formatAmount(invoice.net_amount, invoice.currency)}</td>
       <td data-label="Brutto">${formatAmount(invoice.gross_amount, invoice.currency)}</td>
@@ -456,6 +492,7 @@ function renderTable(invoices) {
       <td data-label="Akcje">
         <div class="row-actions">
           <button class="btn btn-secondary btn-small" data-action="set-vehicle" data-id="${invoice.id}">Pojazd</button>
+          <button class="btn btn-secondary btn-small" data-action="set-service-month" data-id="${invoice.id}">Miesiąc</button>
           <button class="btn btn-secondary btn-small" data-action="edit" data-id="${invoice.id}">Edytuj</button>
           <button class="btn btn-secondary btn-small" data-action="toggle-status" data-id="${invoice.id}" data-paid="${invoice.paid}">
             ${invoice.paid ? "Oznacz jako nieopłaconą" : "Oznacz jako opłaconą"}
@@ -518,6 +555,11 @@ function openInvoiceForm(invoice) {
     }
   }
 
+  const fServiceMonth = document.getElementById("f-service-month");
+  if (fServiceMonth) {
+    fServiceMonth.value = invoice ? invoice.service_month || "" : "";
+  }
+
   updateNbpPreview();
   invoiceFormModal.classList.remove("hidden");
 }
@@ -532,6 +574,10 @@ function closeInvoiceForm() {
 invoiceForm.addEventListener("submit", (e) => {
   e.preventDefault();
 
+  const serviceMonthRaw = document.getElementById("f-service-month")
+    ? document.getElementById("f-service-month").value.trim()
+    : "";
+
   const formData = {
     invoice_number: document.getElementById("f-invoice-number").value,
     ksef_number: document.getElementById("f-ksef-number").value || null,
@@ -542,7 +588,8 @@ invoiceForm.addEventListener("submit", (e) => {
     net_amount: document.getElementById("f-net-amount").value,
     gross_amount: document.getElementById("f-gross-amount").value,
     currency: document.getElementById("f-currency").value,
-    paid: document.getElementById("f-paid").value === "true"
+    paid: document.getElementById("f-paid").value === "true",
+    service_month: serviceMonthRaw || null
   };
 
   if (!validateInvoiceForm(formData)) return;
@@ -571,7 +618,8 @@ invoiceForm.addEventListener("submit", (e) => {
     currency: formData.currency,
     paid: formData.paid,
     vehicle_id: vehicleId,
-    allocation_type: allocationType
+    allocation_type: allocationType,
+    service_month: formData.service_month ? formData.service_month.trim() : null
   };
 
   const isEdit = !!currentEditInvoiceId;
@@ -669,6 +717,8 @@ tbodyEl.addEventListener("click", (e) => {
     );
   } else if (action === "set-due-date") {
     openDueDateModal(invoice);
+  } else if (action === "set-service-month") {
+    openServiceMonthModal(invoice);
   }
 });
 
@@ -789,6 +839,112 @@ btnSaveVehicle.addEventListener("click", () => {
   );
 });
 
+// =========================================================================
+// MODAL: PRZYPISZ MIESIĄC ROZLICZENIA
+// =========================================================================
+function updateServiceMonthSelect() {
+  if (!modalServiceMonthSelect) return;
+  const cur = modalServiceMonthSelect.value;
+  const monthOpts = generateMonthOptions()
+    .map((m) => `<option value="${m}">${m}</option>`)
+    .join("");
+  modalServiceMonthSelect.innerHTML = `
+    <option value="">Domyślny (zgodnie z datą wystawienia)</option>
+    ${monthOpts}
+    <option value="custom">Inny miesiąc...</option>
+  `;
+  if (cur) modalServiceMonthSelect.value = cur;
+}
+
+function openServiceMonthModal(invoice) {
+  currentServiceMonthInvoiceId = invoice.id;
+  const seller = invoice.seller_name ? ` (${invoice.seller_name})` : "";
+  if (serviceMonthModalInvoiceLabel) {
+    serviceMonthModalInvoiceLabel.textContent = `Faktura: ${invoice.invoice_number || "-"}${seller} | Data wyst.: ${invoice.issue_date || "-"}`;
+  }
+  if (errServiceMonthModal) errServiceMonthModal.textContent = "";
+
+  updateServiceMonthSelect();
+
+  if (modalServiceMonthSelect) {
+    if (!invoice.service_month) {
+      modalServiceMonthSelect.value = "";
+      if (modalServiceMonthCustom) modalServiceMonthCustom.value = "";
+    } else {
+      const exists = Array.from(modalServiceMonthSelect.options).some((o) => o.value === invoice.service_month);
+      if (exists) {
+        modalServiceMonthSelect.value = invoice.service_month;
+        if (modalServiceMonthCustom) modalServiceMonthCustom.value = "";
+      } else {
+        modalServiceMonthSelect.value = "custom";
+        if (modalServiceMonthCustom) modalServiceMonthCustom.value = invoice.service_month;
+      }
+    }
+  }
+
+  if (serviceMonthModal) serviceMonthModal.classList.remove("hidden");
+}
+
+function closeServiceMonthModal() {
+  if (serviceMonthModal) serviceMonthModal.classList.add("hidden");
+  currentServiceMonthInvoiceId = null;
+  if (errServiceMonthModal) errServiceMonthModal.textContent = "";
+}
+
+if (btnCancelServiceMonth) {
+  btnCancelServiceMonth.addEventListener("click", closeServiceMonthModal);
+}
+
+if (modalServiceMonthSelect && modalServiceMonthCustom) {
+  modalServiceMonthSelect.addEventListener("change", () => {
+    if (modalServiceMonthSelect.value !== "custom") {
+      modalServiceMonthCustom.value = "";
+    }
+  });
+}
+
+if (btnSaveServiceMonth) {
+  btnSaveServiceMonth.addEventListener("click", () => {
+    const invoice = allInvoices.find((inv) => String(inv.id) === String(currentServiceMonthInvoiceId));
+    if (!invoice) return;
+
+    if (errServiceMonthModal) errServiceMonthModal.textContent = "";
+
+    const selectedVal = modalServiceMonthSelect ? modalServiceMonthSelect.value : "";
+    const customVal = modalServiceMonthCustom ? modalServiceMonthCustom.value.trim() : "";
+
+    let chosenMonth = null;
+    if (selectedVal === "custom" || (customVal && selectedVal === "")) {
+      if (!/^\d{4}-\d{2}$/.test(customVal)) {
+        if (errServiceMonthModal) errServiceMonthModal.textContent = "Podaj poprawny miesiąc w formacie RRRR-MM (np. 2026-09).";
+        return;
+      }
+      chosenMonth = customVal;
+    } else if (selectedVal) {
+      chosenMonth = selectedVal;
+    } else if (customVal) {
+      if (!/^\d{4}-\d{2}$/.test(customVal)) {
+        if (errServiceMonthModal) errServiceMonthModal.textContent = "Podaj poprawny miesiąc w formacie RRRR-MM (np. 2026-09).";
+        return;
+      }
+      chosenMonth = customVal;
+    } else {
+      chosenMonth = null;
+    }
+
+    const label = chosenMonth || "domyślny (zgodnie z datą wystawienia)";
+    openConfirmModal(
+      `Ustawić miesiąc rozliczenia dla faktury ${invoice.invoice_number} na: ${label}?`,
+      async () => {
+        const success = await setInvoiceServiceMonth(invoice.id, chosenMonth);
+        if (success) {
+          closeServiceMonthModal();
+        }
+      }
+    );
+  });
+}
+
 // =========================================================================================
 // ZAKLADKA WYNIKI - FUNKCJE WSPOLNE (replikuja logike bota WhatsApp z Supabase Edge Function)
 // =========================================================================================
@@ -824,8 +980,28 @@ function generateMonthOptions() {
 function getMonthRange(month) {
   const [year, monthNum] = month.split("-").map(Number);
   const startOfMonth = `${month}-01`;
-  const endOfMonth = new Date(year, monthNum, 0).toISOString().split("T")[0];
+  const lastDay = new Date(year, monthNum, 0).getDate();
+  const endOfMonth = `${month}-${String(lastDay).padStart(2, "0")}`;
   return { startOfMonth, endOfMonth };
+}
+
+// Tworzy filtr PostgREST dopasowujący faktury do danego miesiąca:
+// - przypisane bezpośrednio przez service_month = 'YYYY-MM'
+// - lub nieprzypisane (service_month IS NULL), których issue_date mieści się w danym miesiącu
+// Dokładna replika logiki z Edge Function whatsapp-webhook.
+function getMonthInvoiceFilter(month) {
+  const { startOfMonth, endOfMonth } = getMonthRange(month);
+  return `service_month.eq.${month},and(service_month.is.null,issue_date.gte.${startOfMonth},issue_date.lte.${endOfMonth})`;
+}
+
+// Pomocnicza funkcja czystej logiki sprawdzająca czy faktura należy do danego miesiąca rozliczeniowego
+function invoiceBelongsToMonth(invoice, month) {
+  if (invoice.service_month) {
+    return invoice.service_month === month;
+  }
+  if (!invoice.issue_date) return false;
+  const { startOfMonth, endOfMonth } = getMonthRange(month);
+  return invoice.issue_date >= startOfMonth && invoice.issue_date <= endOfMonth;
 }
 
 // Wypelnia selecty pojazdow, kierowcow i miesiecy w zakladce Wyniki i Faktury.
@@ -854,6 +1030,7 @@ async function loadVehiclesAndDrivers() {
     document.getElementById("pp-vehicle-select").innerHTML = vehicleOptions;
 
     updateVehicleSelects();
+    updateServiceMonthSelect();
 
     if (allInvoices.length > 0) {
       applyFiltersAndRender();
@@ -923,11 +1100,10 @@ async function fetchVehicleResult(vehicleId, month) {
 
     const { data: invoices, error: invError } = await supabaseClient
       .from("invoices")
-      .select("net_amount, currency")
+      .select("net_amount, currency, issue_date, service_month")
       .eq("vehicle_id", vehicleId)
       .eq("allocation_type", "vehicle")
-      .gte("issue_date", startOfMonth)
-      .lte("issue_date", endOfMonth);
+      .or(getMonthInvoiceFilter(month));
     if (invError) throw invError;
 
     const { data: expenses, error: expError } = await supabaseClient
@@ -1118,11 +1294,10 @@ async function fetchVehicleSummary(vehicleId, month) {
 
     const { data: invoices, error } = await supabaseClient
       .from("invoices")
-      .select("invoice_number, net_amount, gross_amount, currency, paid")
+      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
       .eq("vehicle_id", vehicleId)
       .eq("allocation_type", "vehicle")
-      .gte("issue_date", startOfMonth)
-      .lte("issue_date", endOfMonth);
+      .or(getMonthInvoiceFilter(month));
     if (error) throw error;
 
     let netTotal = 0;
@@ -1222,11 +1397,10 @@ async function fetchComparison(month) {
 
     const { data: invoices, error: invError } = await supabaseClient
       .from("invoices")
-      .select("vehicle_id, net_amount, currency")
+      .select("vehicle_id, net_amount, currency, issue_date, service_month")
       .in("vehicle_id", vehicleIds)
       .eq("allocation_type", "vehicle")
-      .gte("issue_date", startOfMonth)
-      .lte("issue_date", endOfMonth);
+      .or(getMonthInvoiceFilter(month));
     if (invError) throw invError;
 
     const { data: expenses, error: expError } = await supabaseClient
@@ -1492,11 +1666,23 @@ rulesView.addEventListener("click", async event => {
 
 // INICJALIZACJA
 // =========================================================================
-document.addEventListener("DOMContentLoaded", async () => {
-  const { data } = await supabaseClient.auth.getSession();
-  renderAuthState(data.session);
-  if (data.session) {
-    await loadVehiclesAndDrivers();
-    await fetchInvoices();
-  }
-});
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("DOMContentLoaded", async () => {
+    const { data } = await supabaseClient.auth.getSession();
+    renderAuthState(data.session);
+    if (data.session) {
+      await loadVehiclesAndDrivers();
+      await fetchInvoices();
+    }
+  });
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    getMonthRange,
+    getMonthInvoiceFilter,
+    invoiceBelongsToMonth,
+    generateMonthOptions,
+    renderVehicleBadge
+  };
+}

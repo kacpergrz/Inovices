@@ -255,6 +255,14 @@ body {
   color: #6b7280;
 }
 
+.badge-service-month {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  display: inline-block;
+}
+
 .row-actions {
   display: flex;
   gap: 6px;

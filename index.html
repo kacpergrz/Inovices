@@ -302,6 +302,12 @@
           </select>
         </div>
 
+        <div class="form-row">
+          <label for="f-service-month">Miesiąc rozliczenia (opcjonalnie)</label>
+          <input type="text" id="f-service-month" placeholder="np. 2026-09 (domyślnie z daty wystawienia)">
+          <span class="error-msg" id="err-service-month"></span>
+        </div>
+
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Zapisz</button>
           <button type="button" class="btn btn-secondary" id="btn-cancel-form">Anuluj</button>
@@ -371,6 +377,33 @@
       <div class="form-actions">
         <button type="button" class="btn btn-primary" id="btn-save-vehicle">Zapisz</button>
         <button type="button" class="btn btn-secondary" id="btn-cancel-vehicle">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Przypisz miesiąc rozliczenia -->
+  <div id="service-month-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Przypisz miesiąc rozliczenia</h2>
+      <p id="service-month-modal-invoice-label" class="nbp-preview"></p>
+
+      <div class="form-row">
+        <label for="modal-service-month-select">Wybierz miesiąc rozliczenia</label>
+        <select id="modal-service-month-select">
+          <option value="">Domyślny (zgodnie z datą wystawienia)</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label for="modal-service-month-custom">Lub wpisz inny miesiąc (RRRR-MM)</label>
+        <input type="text" id="modal-service-month-custom" placeholder="np. 2026-09">
+      </div>
+
+      <span class="error-msg" id="err-service-month-modal"></span>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-save-service-month">Zapisz</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-service-month">Anuluj</button>
       </div>
     </div>
   </div>
