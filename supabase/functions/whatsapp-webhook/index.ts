@@ -1151,6 +1151,59 @@ async function fetchInvoicesFromBroker(params: { daysBack?: number; from?: strin
   return Array.isArray(data?.invoices) ? data.invoices : [];
 }
 
+async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<string, string | null>> {
+  if (!ksefNumbers || ksefNumbers.length === 0) return {};
+
+  let brokerBaseUrl = (Deno.env.get("KSEF_BROKER_URL") ?? "").trim();
+  const brokerApiKey = (Deno.env.get("KSEF_BROKER_API_KEY") ?? "").trim();
+
+  if (!brokerBaseUrl || !brokerApiKey) {
+    return {};
+  }
+
+  while (brokerBaseUrl.endsWith("/")) {
+    brokerBaseUrl = brokerBaseUrl.slice(0, -1);
+  }
+
+  try {
+    const res = await fetch(`${brokerBaseUrl}/fetch-xml-dates`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${brokerApiKey}`,
+      },
+      body: JSON.stringify({ ksefNumbers }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[KSeF Broker XML] Błąd ${res.status} pobierania dat sprzedaży:`, await res.text());
+      return {};
+    }
+
+    const data = await res.json();
+    return (data && typeof data.dates === "object" && data.dates) ? data.dates : {};
+  } catch (err: any) {
+    console.warn("[KSeF Broker XML] Błąd wywołania /fetch-xml-dates:", err.message);
+    return {};
+  }
+}
+
+async function getNewInvoicesXmlDates(invoices: any[]): Promise<Record<string, string | null>> {
+  const ksefNumbersToCheck = invoices.map((inv: any) => inv.ksef_number).filter(Boolean);
+  if (ksefNumbersToCheck.length === 0) return {};
+
+  const { data: existingInvoices } = await supabase
+    .from("invoices")
+    .select("ksef_number")
+    .in("ksef_number", ksefNumbersToCheck);
+
+  const existingSet = new Set((existingInvoices || []).map((e: any) => e.ksef_number));
+  const newKsefNumbers = ksefNumbersToCheck.filter((num: string) => !existingSet.has(num));
+
+  if (newKsefNumbers.length === 0) return {};
+  return await fetchXmlDatesFromBroker(newKsefNumbers);
+}
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -1422,6 +1475,8 @@ if (
           );
         }
 
+        const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
+
         const payloadToInsert = invoices.map((inv: any) => {
           const nip = normalizeNip(inv.seller_nip);
           const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
@@ -1432,11 +1487,16 @@ if (
 
           const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
+          const saleDate = xmlDatesMap[inv.ksef_number] || inv.sale_date || null;
+          const effectiveDate = saleDate || inv.issue_date || null;
+          const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+
           return {
             ksef_number: inv.ksef_number || null,
             num: inv.invoice_number || inv.ksef_number || null,
             invoice_number: inv.invoice_number || null,
             issue_date: inv.issue_date || null,
+            service_month: serviceMonth,
             due_date: inferDueDate(inv, rules),
             payment_days: inferPaymentDays(inv, rules),
             gross_amount: inv.gross_amount ?? null,
@@ -2169,6 +2229,9 @@ for (const vehicle of activeVehicles ?? []) {
     vehicle
   );
 }
+
+const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
+
 const payloadToInsert = invoices.map((inv: any) => {
   const nip = normalizeNip(inv.seller_nip);
   const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
@@ -2179,11 +2242,16 @@ const payloadToInsert = invoices.map((inv: any) => {
 
   const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
+  const saleDate = xmlDatesMap[inv.ksef_number] || inv.sale_date || null;
+  const effectiveDate = saleDate || inv.issue_date || null;
+  const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+
   return {
     ksef_number: inv.ksef_number || null,
     num: inv.invoice_number || inv.ksef_number || null,
     invoice_number: inv.invoice_number || null,
     issue_date: inv.issue_date || null,
+    service_month: serviceMonth,
     due_date: inferDueDate(inv, rules),
     payment_days: inferPaymentDays(inv, rules),
     gross_amount: inv.gross_amount ?? null,
