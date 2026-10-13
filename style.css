@@ -540,3 +540,68 @@ body {
 .rules-card .table-wrapper { overflow-x:auto; }
 .rules-card .row-actions { display:flex; flex-wrap:wrap; gap:6px; }
 @media(max-width:800px) { .rules-grid { grid-template-columns:1fr; } .rules-card:last-child { grid-column:auto; } }
+
+/* Odznaki i statusy */
+.badge-urgent {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  font-weight: 700;
+  border: 1px solid #f87171;
+}
+
+.badge-active {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-inactive {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+}
+
+.badge-trip-ongoing {
+  background-color: #ecfdf5;
+  color: #047857;
+  font-weight: 600;
+}
+
+.badge-trip-finished {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Moduł Importu E100 */
+.e100-import-box {
+  background-color: var(--color-surface);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.e100-import-box h3 {
+  margin-top: 0;
+  color: var(--color-primary-dark);
+}
+
+.e100-details-card {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--color-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+.file-input {
+  cursor: pointer;
+  background-color: var(--color-surface);
+}
+
+.file-input::-webkit-file-upload-button {
+  padding: 8px 14px;
+  background-color: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}

@@ -12,6 +12,9 @@
     <nav class="main-nav hidden" id="main-nav">
       <button type="button" class="nav-btn active" id="nav-faktury" data-target="app-view">Faktury</button>
       <button type="button" class="nav-btn" id="nav-wyniki" data-target="results-view">Wyniki</button>
+      <button type="button" class="nav-btn" id="nav-koszty" data-target="expenses-view">Koszty</button>
+      <button type="button" class="nav-btn" id="nav-kierowcy" data-target="drivers-view">Kierowcy i Trasy</button>
+      <button type="button" class="nav-btn" id="nav-pojazdy" data-target="vehicles-view">Pojazdy</button>
       <button type="button" class="nav-btn" id="nav-reguly" data-target="rules-view">Reguły</button>
     </nav>
     <button id="btn-logout" class="btn btn-secondary btn-small hidden">Wyloguj</button>
@@ -55,6 +58,7 @@
           <option value="all">Wszystkie</option>
           <option value="paid">Opłacone</option>
           <option value="unpaid">Nieopłacone</option>
+          <option value="urgent">🔥 Pilne (&le; 3 dni / przeterminowane)</option>
         </select>
       </div>
       <div class="filter-box">
@@ -73,6 +77,7 @@
           <option value="due-soonest">Najbliższy termin płatności</option>
         </select>
       </div>
+      <button id="btn-ksef-sync" class="btn btn-secondary">📥 Pobierz z KSeF</button>
       <button id="btn-open-add" class="btn btn-primary">+ Dodaj fakturę</button>
     </section>
 
@@ -102,19 +107,45 @@
     </section>
   </main>
 
-  <!-- WIDOK WYNIKI (pojazdy / kierowcy) -->
+  <!-- WIDOK WYNIKI (firma / pojazdy / kierowcy) -->
   <main class="container hidden" id="results-view">
     <div id="results-status" class="status-bar" aria-live="polite"></div>
 
     <section class="sub-tabs">
-      <button type="button" class="sub-tab-btn active" data-subtarget="sub-wynik-pojazdu">Wynik pojazdu</button>
+      <button type="button" class="sub-tab-btn active" data-subtarget="sub-wynik-firmy">Wynik firmy</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-podsumowanie-firmy">Podsumowanie sprzedaży</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-wynik-pojazdu">Wynik pojazdu</button>
       <button type="button" class="sub-tab-btn" data-subtarget="sub-wyplata">Wypłata kierowcy</button>
       <button type="button" class="sub-tab-btn" data-subtarget="sub-podsumowanie-pojazdu">Podsumowanie pojazdu</button>
       <button type="button" class="sub-tab-btn" data-subtarget="sub-porownanie">Porównanie pojazdów</button>
     </section>
 
+    <!-- WYNIK FIRMY -->
+    <section class="sub-panel" id="sub-wynik-firmy">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="wf-month-select">Miesiąc</label>
+          <select id="wf-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-wf">Pokaż wynik firmy</button>
+      </div>
+      <div id="wf-result"></div>
+    </section>
+
+    <!-- PODSUMOWANIE SPRZEDAŻY (FIRMY) -->
+    <section class="sub-panel hidden" id="sub-podsumowanie-firmy">
+      <div class="filters-row">
+        <div class="filter-box">
+          <label for="pf-month-select">Miesiąc</label>
+          <select id="pf-month-select"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-load-pf">Pokaż podsumowanie</button>
+      </div>
+      <div id="pf-result"></div>
+    </section>
+
     <!-- WYNIK POJAZDU -->
-    <section class="sub-panel" id="sub-wynik-pojazdu">
+    <section class="sub-panel hidden" id="sub-wynik-pojazdu">
       <div class="filters-row">
         <div class="filter-box">
           <label for="wp-vehicle-select">Pojazd</label>
@@ -172,6 +203,231 @@
       </div>
       <div id="por-result"></div>
     </section>
+  </main>
+
+  <!-- WIDOK KOSZTÓW I WYDATKÓW -->
+  <main class="container hidden" id="expenses-view">
+    <div id="expenses-status" class="status-bar" aria-live="polite"></div>
+
+    <section class="sub-tabs">
+      <button type="button" class="sub-tab-btn active" data-subtarget="sub-expenses-list">Lista wydatków</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-expenses-e100">Import raportu E100 (.xlsx)</button>
+    </section>
+
+    <!-- LISTA WYDATKÓW -->
+    <section class="sub-panel" id="sub-expenses-list">
+      <div class="toolbar">
+        <div class="filter-box">
+          <label for="exp-filter-month">Miesiąc</label>
+          <select id="exp-filter-month"></select>
+        </div>
+        <div class="filter-box">
+          <label for="exp-filter-vehicle">Pojazd / Przypisanie</label>
+          <select id="exp-filter-vehicle">
+            <option value="all">Wszystkie</option>
+            <option value="unassigned">Nieprzypisane</option>
+            <option value="shared">Wspólne dla firmy</option>
+          </select>
+        </div>
+        <div class="search-box">
+          <label for="exp-search-input">Szukaj (kategoria, opis)</label>
+          <input type="text" id="exp-search-input" placeholder="np. paliwo, leasing, serwis">
+        </div>
+        <button id="btn-open-add-expense" class="btn btn-primary">+ Dodaj koszt</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="expenses-table" class="invoices-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Kategoria</th>
+              <th>Kwota (PLN)</th>
+              <th>Miesiąc</th>
+              <th>Opis / Źródło</th>
+              <th>Przypisanie</th>
+              <th>Data wpisu</th>
+              <th>Akcje</th>
+            </tr>
+          </thead>
+          <tbody id="expenses-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- IMPORT E100 -->
+    <section class="sub-panel hidden" id="sub-expenses-e100">
+      <div class="e100-import-box">
+        <h3>Wgraj raport transakcji z portalu E100 (*.xlsx)</h3>
+        <p class="rules-hint">Raport zostanie automatycznie podzielony na paliwo oraz opłaty drogowe (myto) z przeliczeniem stawek VAT dla poszczególnych krajów wg reguł w systemie oraz kursów walut NBP.</p>
+
+        <div class="form-row">
+          <label for="e100-file-input">Wybierz plik Excel (.xlsx)</label>
+          <input type="file" id="e100-file-input" accept=".xlsx" class="file-input">
+        </div>
+
+        <div id="e100-file-details" class="hidden e100-details-card">
+          <div class="filters-row">
+            <div class="filter-box">
+              <label for="e100-target-month">Miesiąc docelowy rozliczenia *</label>
+              <select id="e100-target-month"></select>
+            </div>
+            <div class="filter-box">
+              <label for="e100-target-vehicle">Przypisz do pojazdu</label>
+              <select id="e100-target-vehicle"></select>
+            </div>
+            <div class="filter-box">
+              <label for="e100-filter-from-date">Transakcje tylko od daty (opcjonalnie)</label>
+              <input type="date" id="e100-filter-from-date">
+            </div>
+            <button type="button" id="btn-save-e100-import" class="btn btn-primary">💾 Przelicz i zapisz koszty</button>
+            <button type="button" id="btn-cancel-e100-preview" class="btn btn-secondary">Anuluj</button>
+          </div>
+          <div id="e100-preview-summary" class="result-cards"></div>
+          <h4>Podgląd odczytanych pozycji (<span id="e100-preview-count">0</span>):</h4>
+          <div class="table-wrapper" style="max-height: 350px; overflow-y: auto;">
+            <table class="invoices-table" id="e100-preview-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Usługa</th>
+                  <th>Kraj</th>
+                  <th>Ilość</th>
+                  <th>Kwota brutto</th>
+                  <th>Waluta</th>
+                </tr>
+              </thead>
+              <tbody id="e100-preview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="e100-history-box" style="margin-top: 24px;">
+        <div class="filters-row">
+          <div class="filter-box">
+            <label for="e100-history-month">Przeglądaj zapisane transakcje E100 z miesiąca:</label>
+            <select id="e100-history-month"></select>
+          </div>
+          <div class="filter-box">
+            <label for="e100-history-vehicle">Filtruj wg pojazdu:</label>
+            <select id="e100-history-vehicle">
+              <option value="all">Wszystkie pojazdy</option>
+            </select>
+          </div>
+          <button type="button" id="btn-load-e100-history" class="btn btn-primary">Pokaż transakcje</button>
+          <button type="button" id="btn-revert-e100" class="btn btn-secondary" style="color: var(--color-danger); margin-left: auto;">🗑 Cofnij import E100 dla tego miesiąca</button>
+        </div>
+        <div id="e100-history-summary"></div>
+        <div class="table-wrapper">
+          <table class="invoices-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Pojazd</th>
+                <th>Usługa</th>
+                <th>Kraj</th>
+                <th>Ilość</th>
+                <th>Brutto</th>
+                <th>Netto PLN</th>
+                <th>Okres</th>
+              </tr>
+            </thead>
+            <tbody id="e100-history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- WIDOK KIEROWCÓW I TRAS -->
+  <main class="container hidden" id="drivers-view">
+    <div id="drivers-status" class="status-bar" aria-live="polite"></div>
+
+    <section class="sub-tabs">
+      <button type="button" class="sub-tab-btn active" data-subtarget="sub-drivers-list">Kierowcy i stawki</button>
+      <button type="button" class="sub-tab-btn" data-subtarget="sub-drivers-trips">Ewidencja tras i wyjazdów</button>
+    </section>
+
+    <!-- LISTA KIEROWCÓW -->
+    <section class="sub-panel" id="sub-drivers-list">
+      <div class="toolbar">
+        <button id="btn-open-add-driver" class="btn btn-primary">+ Dodaj kierowcę</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="drivers-table" class="invoices-table">
+          <thead>
+            <tr>
+              <th>Imię i nazwisko</th>
+              <th>Stawka podstawowa (PLN)</th>
+              <th>Dniówka (PLN/dzień)</th>
+              <th>Domyślny pojazd</th>
+              <th>Stan</th>
+              <th>Akcje</th>
+            </tr>
+          </thead>
+          <tbody id="drivers-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- EWIDENCJA TRAS -->
+    <section class="sub-panel hidden" id="sub-drivers-trips">
+      <div class="toolbar">
+        <div class="filter-box">
+          <label for="trips-filter-driver">Kierowca</label>
+          <select id="trips-filter-driver"><option value="all">Wszyscy kierowcy</option></select>
+        </div>
+        <div class="filter-box">
+          <label for="trips-filter-month">Miesiąc</label>
+          <select id="trips-filter-month"><option value="all">Wszystkie</option></select>
+        </div>
+        <div class="row-actions" style="margin-left: auto;">
+          <button id="btn-open-trip-start" class="btn btn-primary">🚛 Rozpocznij wyjazd</button>
+          <button id="btn-open-trip-end" class="btn btn-secondary">🏁 Zarejestruj powrót / zjazd</button>
+          <button id="btn-open-trip-manual" class="btn btn-secondary">+ Dodaj trasę archiwalną</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="trips-table-main" class="invoices-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Kierowca</th>
+              <th>Data od</th>
+              <th>Data do</th>
+              <th>Dni</th>
+              <th>Opis trasy</th>
+              <th>Status</th>
+              <th>Akcje</th>
+            </tr>
+          </thead>
+          <tbody id="trips-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- WIDOK POJAZDÓW -->
+  <main class="container hidden" id="vehicles-view">
+    <div id="vehicles-status" class="status-bar" aria-live="polite"></div>
+    <div class="toolbar">
+      <button id="btn-open-add-vehicle" class="btn btn-primary">+ Dodaj pojazd</button>
+    </div>
+    <div class="table-wrapper">
+      <table id="vehicles-table" class="invoices-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nazwa</th>
+            <th>Numer rejestracyjny</th>
+            <th>Stan</th>
+            <th>Akcje</th>
+          </tr>
+        </thead>
+        <tbody id="vehicles-tbody"></tbody>
+      </table>
+    </div>
   </main>
 
   <!-- WIDOK REGUŁ -->
@@ -408,6 +664,253 @@
     </div>
   </div>
 
+  <!-- MODAL: Pobierz faktury z KSeF -->
+  <div id="ksef-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>Pobierz faktury z KSeF</h2>
+      <p class="rules-hint">Pobiera faktury z Krajowego Systemu e-Faktur za pośrednictwem brokera KSeF oraz automatycznie przypisuje domyślne terminy i pojazdy wg reguł.</p>
+
+      <div class="form-row">
+        <label><input type="radio" name="ksef-range-mode" value="today" checked> Faktury z dzisiejszego dnia</label>
+      </div>
+      <div class="form-row">
+        <label><input type="radio" name="ksef-range-mode" value="daysBack"> Z ostatnich dni (np. 30 dni):</label>
+        <input type="number" id="ksef-days-input" min="1" max="180" value="30">
+      </div>
+      <div class="form-row">
+        <label><input type="radio" name="ksef-range-mode" value="range"> Wybrany zakres dat:</label>
+        <div style="display:flex; gap:8px;">
+          <input type="date" id="ksef-date-from">
+          <input type="date" id="ksef-date-to">
+        </div>
+      </div>
+
+      <span class="error-msg" id="err-ksef-modal"></span>
+      <div id="ksef-progress-msg" class="nbp-preview" style="margin-top:8px;"></div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-execute-ksef-sync">Rozpocznij pobieranie</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-ksef-modal">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Dodaj / Edytuj koszt -->
+  <div id="expense-form-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 id="expense-form-title">Dodaj wydatek / koszt</h2>
+      <form id="expense-form" novalidate>
+        <input type="hidden" id="exp-id">
+
+        <div class="form-row">
+          <label for="exp-category">Kategoria *</label>
+          <select id="exp-category" required>
+            <option value="paliwo">Paliwo</option>
+            <option value="autostrady">Autostrady / myto</option>
+            <option value="kierowca">Wypłata kierowcy</option>
+            <option value="leasing">Leasing / raty</option>
+            <option value="ubezpieczenie">Ubezpieczenie (OC/AC/OCP)</option>
+            <option value="serwis">Serwis / naprawy / części</option>
+            <option value="parking">Parking</option>
+            <option value="inne">Inne koszty</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="exp-amount">Kwota netto (PLN) *</label>
+          <input type="number" step="0.01" min="0.01" id="exp-amount" required placeholder="np. 450.00">
+          <span class="error-msg" id="err-exp-amount"></span>
+        </div>
+
+        <div class="form-row">
+          <label for="exp-month">Miesiąc rozliczenia (RRRR-MM) *</label>
+          <input type="text" id="exp-month" required placeholder="np. 2026-09">
+          <span class="error-msg" id="err-exp-month"></span>
+        </div>
+
+        <div class="form-row">
+          <label for="exp-vehicle">Przypisany pojazd</label>
+          <select id="exp-vehicle">
+            <option value="unassigned">Nieprzypisany</option>
+            <option value="shared">Wspólne dla firmy</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="exp-description">Opis / Uwagi (opcjonalnie)</label>
+          <input type="text" id="exp-description" placeholder="np. Serwis olejowy, wymiana opon">
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Zapisz koszt</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-expense-form">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Przypisz koszt do pojazdu -->
+  <div id="expense-vehicle-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Przypisz koszt</h2>
+      <p id="expense-vehicle-label" class="nbp-preview"></p>
+
+      <div class="form-row">
+        <label for="exp-modal-vehicle-select">Wybierz pojazd lub przypisanie</label>
+        <select id="exp-modal-vehicle-select">
+          <option value="unassigned">Nieprzypisany</option>
+          <option value="shared">Wspólne dla firmy</option>
+        </select>
+      </div>
+
+      <span class="error-msg" id="err-expense-vehicle-modal"></span>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-save-expense-vehicle">Zapisz</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-expense-vehicle">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Dodaj / Edytuj kierowcę -->
+  <div id="driver-form-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2 id="driver-form-title">Dodaj kierowcę</h2>
+      <form id="driver-form" novalidate>
+        <div class="form-row">
+          <label for="driver-name-input">Imię i nazwisko / Pseudonim *</label>
+          <input type="text" id="driver-name-input" required placeholder="np. Jan Kowalski lub Janek">
+          <span class="error-msg" id="err-driver-name"></span>
+        </div>
+
+        <div class="form-row">
+          <label for="driver-base-input">Stawka podstawowa miesięczna (PLN) *</label>
+          <input type="number" step="0.01" min="0" id="driver-base-input" required placeholder="np. 4000">
+        </div>
+
+        <div class="form-row">
+          <label for="driver-rate-input">Stawka dzienna w trasie (PLN/dzień) *</label>
+          <input type="number" step="0.01" min="0" id="driver-rate-input" required placeholder="np. 450">
+        </div>
+
+        <div class="form-row">
+          <label for="driver-vehicle-input">Domyślny pojazd (opcjonalnie)</label>
+          <select id="driver-vehicle-input"><option value="">Brak / Różne</option></select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Zapisz</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-driver-form">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Rozpocznij wyjazd w trasę -->
+  <div id="trip-start-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Rozpocznij wyjazd w trasę</h2>
+      <form id="trip-start-form">
+        <div class="form-row">
+          <label for="trip-start-driver">Kierowca *</label>
+          <select id="trip-start-driver" required></select>
+        </div>
+        <div class="form-row">
+          <label for="trip-start-date">Data wyjazdu *</label>
+          <input type="date" id="trip-start-date" required>
+        </div>
+        <div class="form-row">
+          <label for="trip-start-desc">Kierunek / Opis trasy (opcjonalnie)</label>
+          <input type="text" id="trip-start-desc" placeholder="np. Niemcy - Holandia">
+        </div>
+        <span class="error-msg" id="err-trip-start"></span>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Wyrusz w trasę</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-trip-start">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Zarejestruj powrót / zjazd -->
+  <div id="trip-end-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Zarejestruj powrót / zjazd z trasy</h2>
+      <form id="trip-end-form">
+        <div class="form-row">
+          <label for="trip-end-active-select">Wybierz aktywną trasę w toku *</label>
+          <select id="trip-end-active-select" required></select>
+        </div>
+        <div class="form-row">
+          <label for="trip-end-date">Data zjazdu *</label>
+          <input type="date" id="trip-end-date" required>
+        </div>
+        <p id="trip-end-calculation-preview" class="nbp-preview"></p>
+        <span class="error-msg" id="err-trip-end"></span>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Zakończ trasę</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-trip-end">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Dodaj trasę archiwalną -->
+  <div id="trip-manual-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Dodaj trasę (archiwalną)</h2>
+      <form id="trip-manual-form">
+        <div class="form-row">
+          <label for="trip-manual-driver">Kierowca *</label>
+          <select id="trip-manual-driver" required></select>
+        </div>
+        <div class="form-row">
+          <label for="trip-manual-start">Data rozpoczęcia *</label>
+          <input type="date" id="trip-manual-start" required>
+        </div>
+        <div class="form-row">
+          <label for="trip-manual-end">Data zakończenia *</label>
+          <input type="date" id="trip-manual-end" required>
+        </div>
+        <div class="form-row">
+          <label for="trip-manual-desc">Opis trasy</label>
+          <input type="text" id="trip-manual-desc" placeholder="np. Francja kółko">
+        </div>
+        <span class="error-msg" id="err-trip-manual"></span>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Zapisz trasę</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-trip-manual">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Dodaj pojazd -->
+  <div id="vehicle-form-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-small">
+      <h2>Dodaj pojazd</h2>
+      <form id="vehicle-form" novalidate>
+        <div class="form-row">
+          <label for="veh-name-input">Nazwa pojazdu *</label>
+          <input type="text" id="veh-name-input" required placeholder="np. VOLVO, SCANIA, DAF">
+          <span class="error-msg" id="err-veh-name"></span>
+        </div>
+
+        <div class="form-row">
+          <label for="veh-plate-input">Numer rejestracyjny *</label>
+          <input type="text" id="veh-plate-input" required placeholder="np. DW12345">
+          <span class="error-msg" id="err-veh-plate"></span>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Dodaj auto</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-vehicle-form">Anuluj</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>

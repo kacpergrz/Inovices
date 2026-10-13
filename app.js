@@ -67,6 +67,10 @@ const btnLogout = document.getElementById("btn-logout");
 // AUTORYZACJA (Supabase Auth)
 // =========================================================================
 function renderAuthState(session) {
+  const expensesView = document.getElementById("expenses-view");
+  const driversView = document.getElementById("drivers-view");
+  const vehiclesView = document.getElementById("vehicles-view");
+
   if (session) {
     loginView.classList.add("hidden");
     appView.classList.remove("hidden");
@@ -77,6 +81,9 @@ function renderAuthState(session) {
     appView.classList.add("hidden");
     resultsView.classList.add("hidden");
     rulesView.classList.add("hidden");
+    if (expensesView) expensesView.classList.add("hidden");
+    if (driversView) driversView.classList.add("hidden");
+    if (vehiclesView) vehiclesView.classList.add("hidden");
     mainNav.classList.add("hidden");
     btnLogout.classList.add("hidden");
   }
@@ -128,27 +135,45 @@ supabaseClient.auth.onAuthStateChange((_event, session) => {
 });
 
 // =========================================================================
-// NAWIGACJA GLOWNA: FAKTURY / WYNIKI
+// NAWIGACJA GLOWNA
 // =========================================================================
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     const target = btn.dataset.target;
-    appView.classList.toggle("hidden", target !== "app-view");
-    resultsView.classList.toggle("hidden", target !== "results-view");
-    rulesView.classList.toggle("hidden", target !== "rules-view");
+
+    const allViews = [
+      appView,
+      resultsView,
+      rulesView,
+      document.getElementById("expenses-view"),
+      document.getElementById("drivers-view"),
+      document.getElementById("vehicles-view")
+    ].filter(Boolean);
+
+    allViews.forEach((v) => {
+      v.classList.toggle("hidden", v.id !== target);
+    });
+
     if (target === "rules-view") loadRulesView();
+    else if (target === "expenses-view") loadExpensesView();
+    else if (target === "drivers-view") loadDriversView();
+    else if (target === "vehicles-view") loadVehiclesView();
+    else if (target === "results-view") initResultsView();
+    else if (target === "app-view") fetchInvoices();
   });
 });
 
-// Nawigacja pod-zakladek wewnatrz Wynikow
+// Nawigacja pod-zakladek wewnatrz sekcji
 document.querySelectorAll(".sub-tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".sub-tab-btn").forEach((b) => b.classList.remove("active"));
+    const parentContainer = btn.closest(".container") || document;
+    const parentNav = btn.closest(".sub-tabs") || parentContainer;
+    parentNav.querySelectorAll(".sub-tab-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     const target = btn.dataset.subtarget;
-    document.querySelectorAll(".sub-panel").forEach((panel) => {
+    parentContainer.querySelectorAll(".sub-panel").forEach((panel) => {
       panel.classList.toggle("hidden", panel.id !== target);
     });
   });
@@ -303,6 +328,11 @@ function applyFiltersAndRender() {
     list = list.filter((inv) => inv.paid === true);
   } else if (statusFilter === "unpaid") {
     list = list.filter((inv) => inv.paid !== true);
+  } else if (statusFilter === "urgent") {
+    const now = new Date();
+    now.setDate(now.getDate() + 3);
+    const targetIso = now.toISOString().split("T")[0];
+    list = list.filter((inv) => inv.paid !== true && inv.due_date && inv.due_date <= targetIso);
   }
 
   if (vehicleFilter === "unassigned") {
@@ -473,9 +503,16 @@ function renderTable(invoices) {
   invoices.forEach((invoice) => {
     const tr = document.createElement("tr");
 
+    const now = new Date();
+    now.setDate(now.getDate() + 3);
+    const targetIso = now.toISOString().split("T")[0];
+    const isUrgent = !invoice.paid && invoice.due_date && invoice.due_date <= targetIso;
+
     const statusBadge = invoice.paid
       ? `<span class="badge badge-paid">Opłacona</span>`
-      : `<span class="badge badge-unpaid">Nieopłacona</span>`;
+      : (isUrgent
+          ? `<span class="badge badge-urgent" title="Termin płatności: ${escapeHtml(invoice.due_date)}">🔥 Pilna</span>`
+          : `<span class="badge badge-unpaid">Nieopłacona</span>`);
 
     tr.innerHTML = `
       <td data-label="Numer faktury">${escapeHtml(invoice.invoice_number || "-")}</td>
@@ -1009,8 +1046,28 @@ async function loadVehiclesAndDrivers() {
   const monthOptions = generateMonthOptions()
     .map((m) => `<option value="${m}">${m}</option>`)
     .join("");
-  ["wp-month-select", "wy-month-select", "pp-month-select", "por-month-select"].forEach((id) => {
-    document.getElementById(id).innerHTML = monthOptions;
+  [
+    "wf-month-select",
+    "pf-month-select",
+    "wp-month-select",
+    "wy-month-select",
+    "pp-month-select",
+    "por-month-select",
+    "exp-filter-month",
+    "e100-target-month",
+    "e100-history-month",
+    "trips-filter-month"
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const cur = el.value;
+      if (id === "trips-filter-month") {
+        el.innerHTML = `<option value="all">Wszystkie</option>${monthOptions}`;
+      } else {
+        el.innerHTML = monthOptions;
+      }
+      if (cur) el.value = cur;
+    }
   });
 
   try {
@@ -1026,8 +1083,10 @@ async function loadVehiclesAndDrivers() {
     const vehicleOptions = allVehicles
       .map((v) => `<option value="${v.id}">${escapeHtml(v.name.toUpperCase())} (${escapeHtml(v.plate)})</option>`)
       .join("");
-    document.getElementById("wp-vehicle-select").innerHTML = vehicleOptions;
-    document.getElementById("pp-vehicle-select").innerHTML = vehicleOptions;
+    const wpVeh = document.getElementById("wp-vehicle-select");
+    if (wpVeh) wpVeh.innerHTML = vehicleOptions;
+    const ppVeh = document.getElementById("pp-vehicle-select");
+    if (ppVeh) ppVeh.innerHTML = vehicleOptions;
 
     updateVehicleSelects();
     updateServiceMonthSelect();
@@ -1038,7 +1097,7 @@ async function loadVehiclesAndDrivers() {
 
     const { data: drivers, error: drvError } = await supabaseClient
       .from("drivers")
-      .select("name")
+      .select("id, name, base_salary, daily_rate, default_vehicle, active")
       .eq("active", true)
       .order("name");
     if (drvError) throw drvError;
@@ -1046,7 +1105,14 @@ async function loadVehiclesAndDrivers() {
     const driverOptions = (drivers || [])
       .map((d) => `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`)
       .join("");
-    document.getElementById("wy-driver-select").innerHTML = driverOptions;
+    const wyDrv = document.getElementById("wy-driver-select");
+    if (wyDrv) wyDrv.innerHTML = driverOptions;
+    const tripStartDrv = document.getElementById("trip-start-driver");
+    if (tripStartDrv) tripStartDrv.innerHTML = driverOptions;
+    const tripManualDrv = document.getElementById("trip-manual-driver");
+    if (tripManualDrv) tripManualDrv.innerHTML = driverOptions;
+    const tripsFilterDrv = document.getElementById("trips-filter-driver");
+    if (tripsFilterDrv) tripsFilterDrv.innerHTML = `<option value="all">Wszyscy kierowcy</option>${driverOptions}`;
   } catch (err) {
     console.error(err);
     showResultsError("Nie udało się wczytać listy pojazdów/kierowców — sprawdź połączenie.");
@@ -1087,6 +1153,254 @@ function updateVehicleSelects() {
     fVehicleSelect.innerHTML = assignmentOptions;
     if (cur) fVehicleSelect.value = cur;
   }
+
+  const expFilterVeh = document.getElementById("exp-filter-vehicle");
+  if (expFilterVeh) {
+    const cur = expFilterVeh.value;
+    expFilterVeh.innerHTML = `
+      <option value="all">Wszystkie</option>
+      <option value="unassigned">Nieprzypisane</option>
+      <option value="shared">Wspólne dla firmy</option>
+      ${vehicleOptGroups}
+    `;
+    if (cur) expFilterVeh.value = cur;
+  }
+
+  const expVeh = document.getElementById("exp-vehicle");
+  if (expVeh) {
+    const cur = expVeh.value;
+    expVeh.innerHTML = assignmentOptions;
+    if (cur) expVeh.value = cur;
+  }
+
+  const expModalVeh = document.getElementById("exp-modal-vehicle-select");
+  if (expModalVeh) {
+    const cur = expModalVeh.value;
+    expModalVeh.innerHTML = assignmentOptions;
+    if (cur) expModalVeh.value = cur;
+  }
+
+  const e100TargetVeh = document.getElementById("e100-target-vehicle");
+  if (e100TargetVeh) {
+    const cur = e100TargetVeh.value;
+    e100TargetVeh.innerHTML = `
+      <option value="unassigned">Nieprzypisany</option>
+      ${vehicleOptGroups}
+    `;
+    if (cur) e100TargetVeh.value = cur;
+  }
+
+  const e100HistVeh = document.getElementById("e100-history-vehicle");
+  if (e100HistVeh) {
+    const cur = e100HistVeh.value;
+    e100HistVeh.innerHTML = `
+      <option value="all">Wszystkie pojazdy</option>
+      ${vehicleOptGroups}
+    `;
+    if (cur) e100HistVeh.value = cur;
+  }
+
+  const drvVeh = document.getElementById("driver-vehicle-input");
+  if (drvVeh) {
+    const cur = drvVeh.value;
+    drvVeh.innerHTML = `
+      <option value="">Brak / Różne</option>
+      ${allVehicles.map((v) => `<option value="${escapeHtml(v.plate)}">${escapeHtml(v.name.toUpperCase())} (${escapeHtml(v.plate)})</option>`).join("")}
+    `;
+    if (cur) drvVeh.value = cur;
+  }
+}
+
+// ==========================================================================
+// WYNIK OGÓLNY FIRMY (replika komendy "wynik [miesiac]" z bota WhatsApp)
+// ==========================================================================
+async function fetchCompanyResult(month) {
+  showResultsLoading("Wczytywanie wyniku finansowego firmy...");
+  try {
+    const rates = await getNbpRates();
+
+    const { data: invoices, error: invError } = await supabaseClient
+      .from("invoices")
+      .select("net_amount, currency, issue_date, service_month")
+      .or(getMonthInvoiceFilter(month));
+    if (invError) throw invError;
+
+    let totalRevenue = 0;
+    let usedForeign = false;
+    (invoices || []).forEach((inv) => {
+      const net = Number(inv.net_amount || 0);
+      const cur = String(inv.currency || "PLN").toUpperCase();
+      const rate = Number(rates[cur] || 1);
+      if (cur !== "PLN") usedForeign = true;
+      totalRevenue += net * rate;
+    });
+
+    const { data: expenses, error: expError } = await supabaseClient
+      .from("expenses")
+      .select("category, amount")
+      .eq("expense_month", month);
+    if (expError) throw expError;
+
+    let totalExpenses = 0;
+    const categories = {};
+    (expenses || []).forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      totalExpenses += amt;
+      const cat = String(exp.category || "inne").toUpperCase();
+      categories[cat] = (categories[cat] || 0) + amt;
+    });
+
+    const profit = totalRevenue - totalExpenses;
+
+    renderCompanyResult({
+      month,
+      invoiceCount: (invoices || []).length,
+      totalRevenue,
+      totalExpenses,
+      categories,
+      profit,
+      usedForeign
+    });
+    clearResultsStatus();
+  } catch (err) {
+    console.error(err);
+    showResultsError("Nie udało się wczytać wyniku firmy — sprawdź połączenie.");
+  }
+}
+
+function renderCompanyResult(r) {
+  const el = document.getElementById("wf-result");
+  if (!el) return;
+  const profitClass = r.profit >= 0 ? "positive" : "negative";
+
+  const categoryRows = Object.entries(r.categories)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, amt]) => `<tr><td>${escapeHtml(cat)}</td><td>-${amt.toFixed(2)} PLN</td></tr>`)
+    .join("");
+
+  el.innerHTML = `
+    <div class="result-cards">
+      <div class="result-card">
+        <div class="result-label">Przychody (z ${r.invoiceCount} faktur)</div>
+        <div class="result-value positive">${r.totalRevenue.toFixed(2)} PLN</div>
+      </div>
+      <div class="result-card">
+        <div class="result-label">Koszty razem</div>
+        <div class="result-value negative">-${r.totalExpenses.toFixed(2)} PLN</div>
+      </div>
+      <div class="result-card">
+        <div class="result-label">Czysty dochód netto firmy</div>
+        <div class="result-value ${profitClass}">${r.profit.toFixed(2)} PLN</div>
+      </div>
+    </div>
+    ${categoryRows
+      ? `<h4>Podział kosztów wg kategorii:</h4>
+         <table class="category-table"><thead><tr><th>Kategoria</th><th>Kwota netto</th></tr></thead><tbody>${categoryRows}</tbody></table>`
+      : `<p class="empty-note">Brak wprowadzonych kosztów w tym miesiącu.</p>`}
+    ${r.usedForeign ? `<p class="currency-note">Faktury w obcych walutach przeliczono wg tabeli kursów NBP.</p>` : ""}
+  `;
+}
+
+// ==========================================================================
+// PODSUMOWANIE SPRZEDAŻY (replika komendy "podsumowanie [miesiac]" z bota WhatsApp)
+// ==========================================================================
+async function fetchCompanySummary(month) {
+  showResultsLoading("Wczytywanie podsumowania sprzedaży...");
+  try {
+    const rates = await getNbpRates();
+
+    const { data: invoices, error } = await supabaseClient
+      .from("invoices")
+      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
+      .or(getMonthInvoiceFilter(month));
+    if (error) throw error;
+
+    let totalGross = 0;
+    let totalNet = 0;
+    let paidGross = 0;
+    let unpaidGross = 0;
+    let usedForeign = false;
+
+    (invoices || []).forEach((inv) => {
+      const cur = String(inv.currency || "PLN").toUpperCase();
+      const rate = Number(rates[cur] || 1);
+      const gross = Number(inv.gross_amount || 0) * rate;
+      const net = Number(inv.net_amount || 0) * rate;
+      totalGross += gross;
+      totalNet += net;
+      if (inv.paid) paidGross += gross;
+      else unpaidGross += gross;
+      if (cur !== "PLN") usedForeign = true;
+    });
+
+    renderCompanySummary({
+      invoiceCount: (invoices || []).length,
+      totalNet,
+      totalGross,
+      paidGross,
+      unpaidGross,
+      usedForeign
+    });
+    clearResultsStatus();
+  } catch (err) {
+    console.error(err);
+    showResultsError("Nie udało się wczytać podsumowania — sprawdź połączenie.");
+  }
+}
+
+function renderCompanySummary(r) {
+  const el = document.getElementById("pf-result");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="result-cards">
+      <div class="result-card">
+        <div class="result-label">Liczba faktur</div>
+        <div class="result-value">${r.invoiceCount}</div>
+      </div>
+      <div class="result-card">
+        <div class="result-label">Suma netto</div>
+        <div class="result-value">${r.totalNet.toFixed(2)} PLN</div>
+      </div>
+      <div class="result-card">
+        <div class="result-label">Suma brutto</div>
+        <div class="result-value">${r.totalGross.toFixed(2)} PLN</div>
+      </div>
+    </div>
+    <div class="result-cards">
+      <div class="result-card">
+        <div class="result-label">Opłacone (brutto)</div>
+        <div class="result-value positive">${r.paidGross.toFixed(2)} PLN</div>
+      </div>
+      <div class="result-card">
+        <div class="result-label">Do zapłaty (brutto)</div>
+        <div class="result-value negative">${r.unpaidGross.toFixed(2)} PLN</div>
+      </div>
+    </div>
+    ${r.usedForeign ? `<p class="currency-note">Faktury w obcych walutach przeliczono wg tabeli kursów NBP.</p>` : ""}
+  `;
+}
+
+function initResultsView() {
+  const curMonth = document.getElementById("wf-month-select")?.value;
+  if (curMonth) {
+    fetchCompanyResult(curMonth);
+  }
+}
+
+const btnLoadWf = document.getElementById("btn-load-wf");
+if (btnLoadWf) {
+  btnLoadWf.addEventListener("click", () => {
+    const month = document.getElementById("wf-month-select")?.value;
+    if (month) fetchCompanyResult(month);
+  });
+}
+
+const btnLoadPf = document.getElementById("btn-load-pf");
+if (btnLoadPf) {
+  btnLoadPf.addEventListener("click", () => {
+    const month = document.getElementById("pf-month-select")?.value;
+    if (month) fetchCompanySummary(month);
+  });
 }
 
 // ==========================================================================
@@ -1663,6 +1977,1327 @@ rulesView.addEventListener("click", async event => {
   if (error) setRulesStatus(error.message, true);
   else await loadRulesView();
 });
+
+// =========================================================================
+// MODUŁ: POBIERZ Z KSEF
+// =========================================================================
+const ksefModal = document.getElementById("ksef-modal");
+const btnKsefSync = document.getElementById("btn-ksef-sync");
+const btnExecuteKsefSync = document.getElementById("btn-execute-ksef-sync");
+const btnCancelKsefModal = document.getElementById("btn-cancel-ksef-modal");
+const errKsefModal = document.getElementById("err-ksef-modal");
+const ksefProgressMsg = document.getElementById("ksef-progress-msg");
+
+function openKsefModal() {
+  if (ksefModal) {
+    if (errKsefModal) errKsefModal.textContent = "";
+    if (ksefProgressMsg) ksefProgressMsg.textContent = "";
+    ksefModal.classList.remove("hidden");
+  }
+}
+
+function closeKsefModal() {
+  if (ksefModal) {
+    ksefModal.classList.add("hidden");
+    if (errKsefModal) errKsefModal.textContent = "";
+    if (ksefProgressMsg) ksefProgressMsg.textContent = "";
+  }
+}
+
+if (btnKsefSync) btnKsefSync.addEventListener("click", openKsefModal);
+if (btnCancelKsefModal) btnCancelKsefModal.addEventListener("click", closeKsefModal);
+
+if (btnExecuteKsefSync) {
+  btnExecuteKsefSync.addEventListener("click", async () => {
+    const mode = document.querySelector('input[name="ksef-range-mode"]:checked')?.value || "today";
+    const daysBack = Number(document.getElementById("ksef-days-input")?.value) || 30;
+    const from = document.getElementById("ksef-date-from")?.value;
+    const to = document.getElementById("ksef-date-to")?.value;
+
+    if (errKsefModal) errKsefModal.textContent = "";
+    if (ksefProgressMsg) ksefProgressMsg.textContent = "⏳ Łączę z KSeF i pobieram faktury...";
+    btnExecuteKsefSync.disabled = true;
+
+    if (mode === "range" && (!from || !to)) {
+      if (errKsefModal) errKsefModal.textContent = "Podaj poprawny zakres dat (od i do).";
+      if (ksefProgressMsg) ksefProgressMsg.textContent = "";
+      btnExecuteKsefSync.disabled = false;
+      return;
+    }
+
+    try {
+      const { data, error } = await supabaseClient.functions.invoke("whatsapp-webhook", {
+        body: { action: "pobierz", mode, daysBack, from, to }
+      });
+      if (error) throw error;
+      if (data && data.ok) {
+        if (ksefProgressMsg) ksefProgressMsg.textContent = `✅ ${data.message || `Pobrano ${data.count} faktur.`}`;
+        await fetchInvoices();
+        setTimeout(closeKsefModal, 1500);
+      } else {
+        if (errKsefModal) errKsefModal.textContent = data?.error || data?.message || "Wystąpił błąd podczas pobierania.";
+        if (ksefProgressMsg) ksefProgressMsg.textContent = "";
+      }
+    } catch (err) {
+      console.error(err);
+      if (errKsefModal) errKsefModal.textContent = `Błąd połączenia: ${err.message || "Nie udało się połączyć z KSeF."}`;
+      if (ksefProgressMsg) ksefProgressMsg.textContent = "";
+    } finally {
+      btnExecuteKsefSync.disabled = false;
+    }
+  });
+}
+
+// =========================================================================
+// MODUŁ: KOSZTY I WYDATKI (replika komend: koszt, koszty, usun_koszt, przypisz_koszt)
+// =========================================================================
+let allExpenses = [];
+let currentExpenseVehicleModalId = null;
+
+const expensesStatusEl = document.getElementById("expenses-status");
+const expensesTbodyEl = document.getElementById("expenses-tbody");
+const expFilterMonthEl = document.getElementById("exp-filter-month");
+const expFilterVehicleEl = document.getElementById("exp-filter-vehicle");
+const expSearchInputEl = document.getElementById("exp-search-input");
+const btnOpenAddExpense = document.getElementById("btn-open-add-expense");
+
+const expenseFormModal = document.getElementById("expense-form-modal");
+const expenseForm = document.getElementById("expense-form");
+const btnCancelExpenseForm = document.getElementById("btn-cancel-expense-form");
+
+const expenseVehicleModal = document.getElementById("expense-vehicle-modal");
+const expModalVehicleSelect = document.getElementById("exp-modal-vehicle-select");
+const btnSaveExpenseVehicle = document.getElementById("btn-save-expense-vehicle");
+const btnCancelExpenseVehicle = document.getElementById("btn-cancel-expense-vehicle");
+const expenseVehicleLabel = document.getElementById("expense-vehicle-label");
+const errExpenseVehicleModal = document.getElementById("err-expense-vehicle-modal");
+
+function showExpensesStatus(msg, isError = false) {
+  if (!expensesStatusEl) return;
+  expensesStatusEl.textContent = msg;
+  expensesStatusEl.className = `status-bar ${isError ? "error" : "loading"}`.trim();
+}
+
+function clearExpensesStatus() {
+  if (!expensesStatusEl) return;
+  expensesStatusEl.textContent = "";
+  expensesStatusEl.className = "status-bar";
+}
+
+function parseAllocation(selectedValue) {
+  let vehicleId = null;
+  let allocationType = "unassigned";
+
+  if (selectedValue === "shared") {
+    allocationType = "shared";
+    vehicleId = null;
+  } else if (selectedValue && selectedValue !== "unassigned") {
+    allocationType = "vehicle";
+    vehicleId = Number(selectedValue);
+  }
+  return { vehicle_id: vehicleId, allocation_type: allocationType };
+}
+
+async function loadExpensesView() {
+  if (allVehicles.length === 0) {
+    await loadVehiclesAndDrivers();
+  }
+  await fetchExpenses();
+}
+
+async function fetchExpenses() {
+  showExpensesStatus("Wczytywanie wydatków...");
+  try {
+    const month = expFilterMonthEl ? expFilterMonthEl.value : "";
+    let query = supabaseClient
+      .from("expenses")
+      .select("id, category, amount, expense_month, description, vehicle_id, allocation_type, source, created_at")
+      .order("created_at", { ascending: false });
+
+    if (month) {
+      query = query.eq("expense_month", month);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    allExpenses = data || [];
+    renderExpensesTable();
+    clearExpensesStatus();
+  } catch (err) {
+    console.error(err);
+    showExpensesStatus("Nie udało się wczytać wydatków — sprawdź połączenie.", true);
+  }
+}
+
+function renderExpensesTable() {
+  if (!expensesTbodyEl) return;
+  expensesTbodyEl.innerHTML = "";
+
+  const vehicleFilter = expFilterVehicleEl ? expFilterVehicleEl.value : "all";
+  const search = expSearchInputEl ? expSearchInputEl.value.trim().toLowerCase() : "";
+
+  let list = [...allExpenses];
+
+  if (vehicleFilter === "unassigned") {
+    list = list.filter((e) => !e.vehicle_id && e.allocation_type !== "shared");
+  } else if (vehicleFilter === "shared") {
+    list = list.filter((e) => e.allocation_type === "shared");
+  } else if (vehicleFilter !== "all") {
+    list = list.filter((e) => e.allocation_type === "vehicle" && String(e.vehicle_id) === String(vehicleFilter));
+  }
+
+  if (search) {
+    list = list.filter((e) => {
+      const cat = (e.category || "").toLowerCase();
+      const desc = (e.description || "").toLowerCase();
+      return cat.includes(search) || desc.includes(search);
+    });
+  }
+
+  if (!list.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="8" style="text-align:center; color:#6b7280;">Brak kosztów do wyświetlenia w tym miesiącu.</td>`;
+    expensesTbodyEl.appendChild(tr);
+    return;
+  }
+
+  list.forEach((e) => {
+    const tr = document.createElement("tr");
+    const sourceBadge = e.source === "e100" ? `<span class="badge badge-service-month">E100</span> ` : "";
+    const dateStr = e.created_at ? e.created_at.slice(0, 10) : "-";
+
+    tr.innerHTML = `
+      <td data-label="ID">#${e.id}</td>
+      <td data-label="Kategoria"><strong>${escapeHtml(String(e.category || "").toUpperCase())}</strong></td>
+      <td data-label="Kwota">${formatAmount(e.amount, "PLN")}</td>
+      <td data-label="Miesiąc">${escapeHtml(e.expense_month || "-")}</td>
+      <td data-label="Opis">${sourceBadge}${escapeHtml(e.description || "-")}</td>
+      <td data-label="Przypisanie">${renderVehicleBadge(e)}</td>
+      <td data-label="Data wpisu">${dateStr}</td>
+      <td data-label="Akcje">
+        <div class="row-actions">
+          <button class="btn btn-secondary btn-small" data-expense-action="assign" data-id="${e.id}">Pojazd</button>
+          <button class="btn btn-secondary btn-small" data-expense-action="delete" data-id="${e.id}" style="color:var(--color-danger)">Usuń</button>
+        </div>
+      </td>
+    `;
+    expensesTbodyEl.appendChild(tr);
+  });
+}
+
+if (expFilterMonthEl) expFilterMonthEl.addEventListener("change", fetchExpenses);
+if (expFilterVehicleEl) expFilterVehicleEl.addEventListener("change", renderExpensesTable);
+if (expSearchInputEl) expSearchInputEl.addEventListener("input", renderExpensesTable);
+
+if (expensesTbodyEl) {
+  expensesTbodyEl.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("button[data-expense-action]");
+    if (!btn) return;
+    const action = btn.dataset.expenseAction;
+    const id = btn.dataset.id;
+    const expense = allExpenses.find((e) => String(e.id) === String(id));
+    if (!expense) return;
+
+    if (action === "assign") {
+      openExpenseVehicleModal(expense);
+    } else if (action === "delete") {
+      openConfirmModal(
+        `Czy na pewno usunąć wydatek #${expense.id} (${String(expense.category).toUpperCase()}, ${expense.amount} PLN)?`,
+        async () => {
+          showExpensesStatus("Usuwanie wydatku...");
+          try {
+            const { error } = await supabaseClient.from("expenses").delete().eq("id", expense.id);
+            if (error) throw error;
+            await fetchExpenses();
+          } catch (err) {
+            console.error(err);
+            showExpensesStatus("Nie udało się usunąć kosztu: " + err.message, true);
+          }
+        }
+      );
+    }
+  });
+}
+
+function openExpenseForm() {
+  if (!expenseFormModal) return;
+  expenseForm.reset();
+  document.getElementById("err-exp-amount").textContent = "";
+  document.getElementById("err-exp-month").textContent = "";
+  const curMonth = expFilterMonthEl?.value || new Date().toISOString().slice(0, 7);
+  document.getElementById("exp-month").value = curMonth;
+  expenseFormModal.classList.remove("hidden");
+}
+
+function closeExpenseForm() {
+  if (expenseFormModal) expenseFormModal.classList.add("hidden");
+}
+
+if (btnOpenAddExpense) btnOpenAddExpense.addEventListener("click", openExpenseForm);
+if (btnCancelExpenseForm) btnCancelExpenseForm.addEventListener("click", closeExpenseForm);
+
+if (expenseForm) {
+  expenseForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const category = document.getElementById("exp-category").value;
+    const amountRaw = document.getElementById("exp-amount").value.trim();
+    const month = document.getElementById("exp-month").value.trim();
+    const vehicleVal = document.getElementById("exp-vehicle").value;
+    const description = document.getElementById("exp-description").value.trim();
+
+    let valid = true;
+    const errAmt = document.getElementById("err-exp-amount");
+    const errM = document.getElementById("err-exp-month");
+    errAmt.textContent = "";
+    errM.textContent = "";
+
+    const amount = Number(amountRaw);
+    if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
+      errAmt.textContent = "Podaj poprawną kwotę większą od 0.";
+      valid = false;
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      errM.textContent = "Format miesiąca: RRRR-MM (np. 2026-09).";
+      valid = false;
+    }
+
+    if (!valid) return;
+
+    const alloc = parseAllocation(vehicleVal);
+    showExpensesStatus("Zapisywanie wydatku...");
+
+    try {
+      const { error } = await supabaseClient.from("expenses").insert({
+        category,
+        amount: Math.round(amount * 100) / 100,
+        expense_month: month,
+        description: description || null,
+        vehicle_id: alloc.vehicle_id,
+        allocation_type: alloc.allocation_type,
+      });
+
+      if (error) throw error;
+      closeExpenseForm();
+      await fetchExpenses();
+    } catch (err) {
+      console.error(err);
+      showExpensesStatus("Nie udało się zapisać wydatku: " + err.message, true);
+    }
+  });
+}
+
+function openExpenseVehicleModal(expense) {
+  if (!expenseVehicleModal) return;
+  currentExpenseVehicleModalId = expense.id;
+  if (expenseVehicleLabel) {
+    expenseVehicleLabel.textContent = `Koszt #${expense.id} (${String(expense.category).toUpperCase()} - ${expense.amount} PLN)`;
+  }
+  if (errExpenseVehicleModal) errExpenseVehicleModal.textContent = "";
+
+  if (expModalVehicleSelect) {
+    if (expense.allocation_type === "shared") {
+      expModalVehicleSelect.value = "shared";
+    } else if (expense.allocation_type === "vehicle" && expense.vehicle_id) {
+      expModalVehicleSelect.value = String(expense.vehicle_id);
+    } else {
+      expModalVehicleSelect.value = "unassigned";
+    }
+  }
+
+  expenseVehicleModal.classList.remove("hidden");
+}
+
+function closeExpenseVehicleModal() {
+  if (expenseVehicleModal) expenseVehicleModal.classList.add("hidden");
+  currentExpenseVehicleModalId = null;
+}
+
+if (btnCancelExpenseVehicle) btnCancelExpenseVehicle.addEventListener("click", closeExpenseVehicleModal);
+
+if (btnSaveExpenseVehicle) {
+  btnSaveExpenseVehicle.addEventListener("click", async () => {
+    if (!currentExpenseVehicleModalId) return;
+    const selectedVal = expModalVehicleSelect ? expModalVehicleSelect.value : "unassigned";
+    const alloc = parseAllocation(selectedVal);
+
+    showExpensesStatus("Przypisywanie kosztu...");
+    try {
+      const { error } = await supabaseClient
+        .from("expenses")
+        .update({
+          vehicle_id: alloc.vehicle_id,
+          allocation_type: alloc.allocation_type,
+        })
+        .eq("id", currentExpenseVehicleModalId);
+
+      if (error) throw error;
+      closeExpenseVehicleModal();
+      await fetchExpenses();
+    } catch (err) {
+      console.error(err);
+      if (errExpenseVehicleModal) errExpenseVehicleModal.textContent = err.message;
+    }
+  });
+}
+
+// =========================================================================
+// MODUŁ: IMPORT RAPORTÓW E100 (.XLSX) (replika parsowania i komendy cofnij_e100)
+// =========================================================================
+let e100ParsedTransactions = [];
+let e100DetectedPlate = "";
+let e100ReportPeriod = "";
+
+const e100FileInput = document.getElementById("e100-file-input");
+const e100FileDetails = document.getElementById("e100-file-details");
+const e100PreviewTbody = document.getElementById("e100-preview-tbody");
+const e100PreviewCount = document.getElementById("e100-preview-count");
+const e100PreviewSummary = document.getElementById("e100-preview-summary");
+const e100TargetMonth = document.getElementById("e100-target-month");
+const e100TargetVehicle = document.getElementById("e100-target-vehicle");
+const e100FilterFromDate = document.getElementById("e100-filter-from-date");
+const btnSaveE100Import = document.getElementById("btn-save-e100-import");
+const btnCancelE100Preview = document.getElementById("btn-cancel-e100-preview");
+
+const e100HistoryMonth = document.getElementById("e100-history-month");
+const e100HistoryVehicle = document.getElementById("e100-history-vehicle");
+const btnLoadE100History = document.getElementById("btn-load-e100-history");
+const btnRevertE100 = document.getElementById("btn-revert-e100");
+const e100HistorySummary = document.getElementById("e100-history-summary");
+const e100HistoryTbody = document.getElementById("e100-history-tbody");
+
+if (e100FileInput) {
+  e100FileInput.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target.result);
+        if (typeof XLSX === "undefined") {
+          throw new Error("Biblioteka SheetJS (XLSX) nie została załadowana.");
+        }
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        const cellB2 = worksheet["B2"] ? String(worksheet["B2"].v || "").trim() : "";
+        let reportPeriod = "";
+        if (cellB2.toLowerCase().includes("okres")) {
+          reportPeriod = cellB2.replace(/^.*okres[:\s]*/i, "").trim();
+        }
+        e100ReportPeriod = reportPeriod;
+
+        let colCar = -1, colDate = -1, colService = -1, colCountry = -1, colAmount = -1, colCurrency = -1, colQty = -1;
+        let headerRowIndex = -1;
+
+        for (let r = 0; r < Math.min(rows.length, 25); r++) {
+          const row = rows[r] || [];
+          for (let c = 0; c < row.length; c++) {
+            const val = String(row[c] || "").toLowerCase().trim();
+            if (val.includes("samochod") || val.includes("pojazd") || val.includes("numer karty")) colCar = c;
+            if (val.includes("data")) colDate = c;
+            if (val.includes("usługa") || val.includes("usluga") || val.includes("towar")) colService = c;
+            if (val.includes("kraj") || val.includes("państwo")) colCountry = c;
+            if (val.includes("kwota") || val.includes("brutto") || val.includes("wartość")) colAmount = c;
+            if (val.includes("waluta")) colCurrency = c;
+            if (val.includes("ilość") || val.includes("ilosc") || val.includes("litry")) colQty = c;
+          }
+          if (colDate !== -1 && colAmount !== -1) {
+            headerRowIndex = r;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          throw new Error("Nie udało się rozpoznać nagłówków kolumn raportu E100 w pliku Excel.");
+        }
+
+        const transactions = [];
+        let detectedPlate = "";
+
+        for (let r = headerRowIndex + 1; r < rows.length; r++) {
+          const row = rows[r];
+          if (!row || !row[colDate] || row[colAmount] === undefined) continue;
+
+          if (colCar !== -1 && row[colCar] && !detectedPlate) {
+            detectedPlate = String(row[colCar]).trim();
+          }
+
+          transactions.push({
+            date: String(row[colDate] || "").trim(),
+            service: String(row[colService] || "").trim(),
+            country: String(row[colCountry] || "").trim().toUpperCase(),
+            gross: Number(String(row[colAmount]).replace(",", ".")) || 0,
+            currency: String(row[colCurrency] || "PLN").trim().toUpperCase(),
+            qty: Number(String(row[colQty] || 0).replace(",", ".")) || 0,
+            report_period: reportPeriod || null,
+          });
+        }
+
+        if (transactions.length === 0) {
+          throw new Error("W pliku nie znaleziono żadnych transakcji.");
+        }
+
+        e100ParsedTransactions = transactions;
+        e100DetectedPlate = detectedPlate;
+
+        if (e100PreviewCount) e100PreviewCount.textContent = transactions.length;
+
+        if (e100TargetVehicle) {
+          const cleanPlate = detectedPlate.replace(/[\s-]/g, "").toLowerCase();
+          const matchedVeh = allVehicles.find((v) => {
+            const vPlate = String(v.plate).replace(/[\s-]/g, "").toLowerCase();
+            const vName = String(v.name).replace(/[\s-]/g, "").toLowerCase();
+            return cleanPlate.includes(vPlate) || vPlate.includes(cleanPlate) || cleanPlate.includes(vName);
+          });
+          if (matchedVeh) {
+            e100TargetVehicle.value = String(matchedVeh.id);
+          } else {
+            e100TargetVehicle.value = "unassigned";
+          }
+        }
+
+        if (e100PreviewTbody) {
+          e100PreviewTbody.innerHTML = transactions.slice(0, 50).map((t) => `
+            <tr>
+              <td>${escapeHtml(t.date)}</td>
+              <td>${escapeHtml(t.service)}</td>
+              <td>${escapeHtml(t.country)}</td>
+              <td>${t.qty > 0 ? t.qty.toFixed(1) + " L" : "-"}</td>
+              <td>${t.gross.toFixed(2)}</td>
+              <td>${escapeHtml(t.currency)}</td>
+            </tr>
+          `).join("");
+        }
+
+        const totalGrossPreview = transactions.reduce((s, t) => s + t.gross, 0);
+        if (e100PreviewSummary) {
+          e100PreviewSummary.innerHTML = `
+            <div class="result-card">
+              <div class="result-label">Liczba transakcji</div>
+              <div class="result-value">${transactions.length}</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">Wykryty pojazd</div>
+              <div class="result-value" style="font-size:1.1rem;">${escapeHtml(detectedPlate || "Brak w arkuszu")}</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">Okres raportu</div>
+              <div class="result-value" style="font-size:1rem;">${escapeHtml(reportPeriod || "Wg dat")}</div>
+            </div>
+          `;
+        }
+
+        if (e100FileDetails) e100FileDetails.classList.remove("hidden");
+      } catch (err) {
+        console.error(err);
+        alert("Błąd odczytu pliku E100: " + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+if (btnCancelE100Preview) {
+  btnCancelE100Preview.addEventListener("click", () => {
+    e100ParsedTransactions = [];
+    if (e100FileDetails) e100FileDetails.classList.add("hidden");
+    if (e100FileInput) e100FileInput.value = "";
+  });
+}
+
+function getVatDivisor(rules, country, kind) {
+  const c = String(country || "").trim().toUpperCase();
+  const cRule = rules.find((r) => r.category === "vat_rate" && r.key === c && r.active);
+  const defRule = rules.find((r) => r.category === "vat_rate" && (r.key === "_default" || r.key === "default") && r.active);
+  const val = cRule?.value || defRule?.value;
+
+  if (kind === "paliwo") {
+    const d = Number(val?.paliwo_vat);
+    return Number.isFinite(d) && d >= 1 && d <= 2 ? d : 1.23;
+  } else {
+    const d = Number(val?.myto_vat);
+    return Number.isFinite(d) && d >= 1 && d <= 2 ? d : 1.00;
+  }
+}
+
+if (btnSaveE100Import) {
+  btnSaveE100Import.addEventListener("click", async () => {
+    if (!e100ParsedTransactions.length) return;
+    const targetMonth = e100TargetMonth?.value;
+    if (!targetMonth) {
+      alert("Wybierz miesiąc docelowy.");
+      return;
+    }
+
+    const vehVal = e100TargetVehicle?.value;
+    const alloc = parseAllocation(vehVal);
+    const filterFromDate = e100FilterFromDate?.value;
+
+    showExpensesStatus("Przeliczam transakcje E100 wg reguł VAT i kursów NBP...");
+    btnSaveE100Import.disabled = true;
+
+    try {
+      const [{ data: rulesData }, rates] = await Promise.all([
+        supabaseClient.from("rules").select("*"),
+        getNbpRates(),
+      ]);
+      const rules = rulesData || [];
+
+      let fuelNetPln = 0;
+      let fuelLiters = 0;
+      let tollNetPln = 0;
+      const detailRows = [];
+
+      for (const t of e100ParsedTransactions) {
+        if (filterFromDate && t.date.includes(".")) {
+          const parts = t.date.split(".");
+          if (parts.length >= 2) {
+            const rowIso = `${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+            const filterIso = filterFromDate.slice(5);
+            if (rowIso < filterIso) continue;
+          }
+        }
+
+        const sLow = t.service.toLowerCase();
+        const isFuel = sLow.includes("on") || sLow.includes("paliwo") || sLow.includes("diesel");
+        const isToll = sLow.includes("drogi") || sLow.includes("toll") || sLow.includes("e-box") || sLow.includes("t4e");
+
+        const divisor = getVatDivisor(rules, t.country, isFuel ? "paliwo" : "myto");
+        const net = divisor ? t.gross / divisor : t.gross;
+        const exchangeRate = Number(rates[t.currency] || 1);
+        const netPln = net * exchangeRate;
+
+        if (isFuel) {
+          fuelLiters += Number(t.qty || 0);
+          fuelNetPln += netPln;
+        } else {
+          tollNetPln += netPln;
+        }
+
+        detailRows.push({
+          vehicle_id: alloc.vehicle_id,
+          truck_plate: e100DetectedPlate || "Pojazd",
+          transaction_date: t.date,
+          service: t.service,
+          country: t.country,
+          qty: t.qty,
+          gross_amount: t.gross,
+          currency: t.currency,
+          net_amount_pln: Math.round(netPln * 100) / 100,
+          expense_month: targetMonth,
+          report_period: t.report_period,
+        });
+      }
+
+      const plateLabel = alloc.vehicle_id
+        ? (allVehicles.find((v) => v.id === alloc.vehicle_id)?.plate || e100DetectedPlate)
+        : e100DetectedPlate;
+
+      if (fuelNetPln > 0) {
+        const { error: fuelErr } = await supabaseClient.from("expenses").insert({
+          category: "paliwo",
+          amount: Math.round(fuelNetPln * 100) / 100,
+          expense_month: targetMonth,
+          description: `E100 Paliwo ${plateLabel} (${fuelLiters.toFixed(1)}L)`,
+          vehicle_id: alloc.vehicle_id,
+          allocation_type: alloc.allocation_type,
+          source: "e100",
+        });
+        if (fuelErr) throw fuelErr;
+      }
+
+      if (tollNetPln > 0) {
+        const { error: tollErr } = await supabaseClient.from("expenses").insert({
+          category: "autostrady",
+          amount: Math.round(tollNetPln * 100) / 100,
+          expense_month: targetMonth,
+          description: `E100 Myto ${plateLabel}`,
+          vehicle_id: alloc.vehicle_id,
+          allocation_type: alloc.allocation_type,
+          source: "e100",
+        });
+        if (tollErr) throw tollErr;
+      }
+
+      if (detailRows.length > 0) {
+        const { error: detErr } = await supabaseClient.from("e100_transactions").insert(detailRows);
+        if (detErr) {
+          console.warn("Zapis bez report_period:", detErr.message);
+          const fallback = detailRows.map(({ report_period, ...rest }) => rest);
+          await supabaseClient.from("e100_transactions").insert(fallback);
+        }
+      }
+
+      alert(`✅ Pomyślnie zaimportowano raport E100 do miesiąca ${targetMonth}!\nDodano: Paliwo ${(fuelNetPln).toFixed(2)} PLN, Myto ${(tollNetPln).toFixed(2)} PLN.\nŁącznie pozycji: ${detailRows.length}.`);
+
+      e100ParsedTransactions = [];
+      if (e100FileDetails) e100FileDetails.classList.add("hidden");
+      if (e100FileInput) e100FileInput.value = "";
+      clearExpensesStatus();
+      await fetchExpenses();
+    } catch (err) {
+      console.error(err);
+      alert("Błąd zapisu raportu E100: " + err.message);
+      clearExpensesStatus();
+    } finally {
+      btnSaveE100Import.disabled = false;
+    }
+  });
+}
+
+if (btnLoadE100History) {
+  btnLoadE100History.addEventListener("click", async () => {
+    const month = e100HistoryMonth ? e100HistoryMonth.value : "";
+    const veh = e100HistoryVehicle ? e100HistoryVehicle.value : "all";
+    if (!month) return;
+
+    showExpensesStatus("Wczytywanie historii transakcji E100...");
+    try {
+      let query = supabaseClient
+        .from("e100_transactions")
+        .select("*")
+        .eq("expense_month", month)
+        .order("id", { ascending: true });
+
+      if (veh !== "all") {
+        query = query.eq("vehicle_id", veh);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const items = data || [];
+      const totalNet = items.reduce((s, i) => s + (Number(i.net_amount_pln) || 0), 0);
+      const totalLiters = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+
+      if (e100HistorySummary) {
+        e100HistorySummary.innerHTML = `
+          <div class="result-cards" style="margin-top:12px;">
+            <div class="result-card">
+              <div class="result-label">Liczba transakcji</div>
+              <div class="result-value">${items.length}</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">Paliwo łącznie</div>
+              <div class="result-value">${totalLiters.toFixed(1)} L</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">Łączny koszt netto</div>
+              <div class="result-value">${totalNet.toFixed(2)} PLN</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (e100HistoryTbody) {
+        if (!items.length) {
+          e100HistoryTbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#6b7280;">Brak transakcji E100 w wybranym miesiącu.</td></tr>`;
+        } else {
+          e100HistoryTbody.innerHTML = items.map((i) => `
+            <tr>
+              <td>${escapeHtml(i.transaction_date || "-")}</td>
+              <td>${escapeHtml(i.truck_plate || "-")}</td>
+              <td>${escapeHtml(i.service || "-")}</td>
+              <td>${escapeHtml(i.country || "-")}</td>
+              <td>${Number(i.qty) > 0 ? Number(i.qty).toFixed(1) + " L" : "-"}</td>
+              <td>${Number(i.gross_amount || 0).toFixed(2)} ${escapeHtml(i.currency || "PLN")}</td>
+              <td>${Number(i.net_amount_pln || 0).toFixed(2)} PLN</td>
+              <td>${escapeHtml(i.report_period || "-")}</td>
+            </tr>
+          `).join("");
+        }
+      }
+      clearExpensesStatus();
+    } catch (err) {
+      console.error(err);
+      showExpensesStatus("Błąd wczytywania transakcji E100: " + err.message, true);
+    }
+  });
+}
+
+if (btnRevertE100) {
+  btnRevertE100.addEventListener("click", () => {
+    const month = e100HistoryMonth ? e100HistoryMonth.value : "";
+    if (!month) return;
+
+    openConfirmModal(
+      `Czy na pewno chcesz cofnąć import E100 dla miesiąca ${month}? Zostaną usunięte wszystkie wpisy kosztów E100 oraz szczegółowe transakcje.`,
+      async () => {
+        showExpensesStatus("Cofanie importu E100...");
+        try {
+          const { error: expErr } = await supabaseClient
+            .from("expenses")
+            .delete()
+            .eq("expense_month", month)
+            .or("source.eq.e100,description.ilike.E100%");
+          if (expErr) throw expErr;
+
+          const { error: trErr } = await supabaseClient
+            .from("e100_transactions")
+            .delete()
+            .eq("expense_month", month);
+          if (trErr) console.warn(trErr.message);
+
+          alert(`Pomyślnie cofnięto import E100 za miesiąc ${month}!`);
+          clearExpensesStatus();
+          await fetchExpenses();
+          if (e100HistoryTbody) e100HistoryTbody.innerHTML = "";
+          if (e100HistorySummary) e100HistorySummary.innerHTML = "";
+        } catch (err) {
+          console.error(err);
+          showExpensesStatus("Błąd usuwania importu E100: " + err.message, true);
+        }
+      }
+    );
+  });
+}
+
+// =========================================================================
+// MODUŁ: KIEROWCY I TRASY (replika komend: kierowca, wyjazd, zjazd, trasa, wyjazdy, usun_wyjazd)
+// =========================================================================
+let allDrivers = [];
+let allTrips = [];
+
+const driversStatusEl = document.getElementById("drivers-status");
+const driversTbody = document.getElementById("drivers-tbody");
+const tripsTbody = document.getElementById("trips-tbody");
+const btnOpenAddDriver = document.getElementById("btn-open-add-driver");
+const driverFormModal = document.getElementById("driver-form-modal");
+const driverForm = document.getElementById("driver-form");
+const btnCancelDriverForm = document.getElementById("btn-cancel-driver-form");
+
+const tripStartModal = document.getElementById("trip-start-modal");
+const tripStartForm = document.getElementById("trip-start-form");
+const btnOpenTripStart = document.getElementById("btn-open-trip-start");
+const btnCancelTripStart = document.getElementById("btn-cancel-trip-start");
+
+const tripEndModal = document.getElementById("trip-end-modal");
+const tripEndForm = document.getElementById("trip-end-form");
+const tripEndActiveSelect = document.getElementById("trip-end-active-select");
+const btnOpenTripEnd = document.getElementById("btn-open-trip-end");
+const btnCancelTripEnd = document.getElementById("btn-cancel-trip-end");
+
+const tripManualModal = document.getElementById("trip-manual-modal");
+const tripManualForm = document.getElementById("trip-manual-form");
+const btnOpenTripManual = document.getElementById("btn-open-trip-manual");
+const btnCancelTripManual = document.getElementById("btn-cancel-trip-manual");
+
+const tripsFilterDriver = document.getElementById("trips-filter-driver");
+const tripsFilterMonth = document.getElementById("trips-filter-month");
+
+function showDriversStatus(msg, isError = false) {
+  if (!driversStatusEl) return;
+  driversStatusEl.textContent = msg;
+  driversStatusEl.className = `status-bar ${isError ? "error" : "loading"}`.trim();
+}
+
+function clearDriversStatus() {
+  if (!driversStatusEl) return;
+  driversStatusEl.textContent = "";
+  driversStatusEl.className = "status-bar";
+}
+
+async function loadDriversView() {
+  await Promise.all([fetchDrivers(), fetchTrips()]);
+}
+
+async function fetchDrivers() {
+  showDriversStatus("Wczytywanie kierowców...");
+  try {
+    const { data, error } = await supabaseClient.from("drivers").select("*").order("name");
+    if (error) throw error;
+    allDrivers = data || [];
+    renderDriversTable();
+    clearDriversStatus();
+  } catch (err) {
+    console.error(err);
+    showDriversStatus("Błąd wczytywania kierowców: " + err.message, true);
+  }
+}
+
+function renderDriversTable() {
+  if (!driversTbody) return;
+  driversTbody.innerHTML = "";
+
+  if (!allDrivers.length) {
+    driversTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#6b7280;">Brak zdefiniowanych kierowców w bazie.</td></tr>`;
+    return;
+  }
+
+  allDrivers.forEach((d) => {
+    const tr = document.createElement("tr");
+    const activeBadge = d.active
+      ? `<span class="badge badge-active">Aktywny</span>`
+      : `<span class="badge badge-inactive">Nieaktywny</span>`;
+
+    tr.innerHTML = `
+      <td data-label="Kierowca"><strong>${escapeHtml(d.name)}</strong></td>
+      <td data-label="Podstawa">${Number(d.base_salary || 0).toFixed(2)} PLN</td>
+      <td data-label="Dniówka">${Number(d.daily_rate || 0).toFixed(2)} PLN/dzień</td>
+      <td data-label="Domyślny pojazd">${escapeHtml(d.default_vehicle || "—")}</td>
+      <td data-label="Stan">${activeBadge}</td>
+      <td data-label="Akcje">
+        <div class="row-actions">
+          <button class="btn btn-secondary btn-small" data-driver-action="edit" data-id="${d.id}">Edytuj stawkę</button>
+          <button class="btn btn-secondary btn-small" data-driver-action="toggle-active" data-id="${d.id}" data-active="${d.active}">
+            ${d.active ? "Wyłącz" : "Włącz"}
+          </button>
+        </div>
+      </td>
+    `;
+    driversTbody.appendChild(tr);
+  });
+}
+
+if (driversTbody) {
+  driversTbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-driver-action]");
+    if (!btn) return;
+    const action = btn.dataset.driverAction;
+    const id = btn.dataset.id;
+    const driver = allDrivers.find((d) => String(d.id) === String(id));
+    if (!driver) return;
+
+    if (action === "edit") {
+      document.getElementById("driver-form-title").textContent = `Edytuj kierowcę: ${driver.name}`;
+      document.getElementById("driver-name-input").value = driver.name;
+      document.getElementById("driver-base-input").value = driver.base_salary || "";
+      document.getElementById("driver-rate-input").value = driver.daily_rate || "";
+      if (document.getElementById("driver-vehicle-input")) {
+        document.getElementById("driver-vehicle-input").value = driver.default_vehicle || "";
+      }
+      driverFormModal.classList.remove("hidden");
+    } else if (action === "toggle-active") {
+      const cur = btn.dataset.active === "true";
+      showDriversStatus("Zmieniam stan kierowcy...");
+      try {
+        const { error } = await supabaseClient.from("drivers").update({ active: !cur }).eq("id", driver.id);
+        if (error) throw error;
+        await fetchDrivers();
+      } catch (err) {
+        showDriversStatus(err.message, true);
+      }
+    }
+  });
+}
+
+if (btnOpenAddDriver) {
+  btnOpenAddDriver.addEventListener("click", () => {
+    document.getElementById("driver-form-title").textContent = "Dodaj kierowcę";
+    driverForm.reset();
+    driverFormModal.classList.remove("hidden");
+  });
+}
+
+if (btnCancelDriverForm) {
+  btnCancelDriverForm.addEventListener("click", () => {
+    driverFormModal.classList.add("hidden");
+  });
+}
+
+if (driverForm) {
+  driverForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("driver-name-input").value.trim();
+    const base = Number(document.getElementById("driver-base-input").value) || 0;
+    const rate = Number(document.getElementById("driver-rate-input").value) || 0;
+    const defVeh = document.getElementById("driver-vehicle-input")?.value || null;
+
+    if (!name) return;
+
+    showDriversStatus("Zapisywanie kierowcy...");
+    try {
+      const { error } = await supabaseClient
+        .from("drivers")
+        .upsert(
+          { name, base_salary: base, daily_rate: rate, default_vehicle: defVeh, active: true },
+          { onConflict: "name" }
+        );
+
+      if (error) throw error;
+      driverFormModal.classList.add("hidden");
+      await fetchDrivers();
+      await loadVehiclesAndDrivers();
+    } catch (err) {
+      showDriversStatus("Błąd zapisu kierowcy: " + err.message, true);
+    }
+  });
+}
+
+// EWIDENCJA TRAS
+async function fetchTrips() {
+  showDriversStatus("Wczytywanie tras...");
+  try {
+    const { data, error } = await supabaseClient
+      .from("driver_trips")
+      .select("*")
+      .order("start_date", { ascending: false });
+
+    if (error) throw error;
+    allTrips = data || [];
+    renderTripsTable();
+    clearDriversStatus();
+  } catch (err) {
+    console.error(err);
+    showDriversStatus("Błąd wczytywania tras: " + err.message, true);
+  }
+}
+
+function renderTripsTable() {
+  if (!tripsTbody) return;
+  tripsTbody.innerHTML = "";
+
+  const filterDrv = tripsFilterDriver ? tripsFilterDriver.value : "all";
+  const filterM = tripsFilterMonth ? tripsFilterMonth.value : "all";
+
+  let list = [...allTrips];
+
+  if (filterDrv !== "all") {
+    list = list.filter((t) => (t.driver_name || "").toLowerCase() === filterDrv.toLowerCase());
+  }
+
+  if (filterM !== "all") {
+    list = list.filter((t) => (t.start_date && t.start_date.startsWith(filterM)) || (t.end_date && t.end_date.startsWith(filterM)));
+  }
+
+  if (!list.length) {
+    tripsTbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#6b7280;">Brak zarejestrowanych tras.</td></tr>`;
+    return;
+  }
+
+  list.forEach((t) => {
+    const tr = document.createElement("tr");
+    const isOngoing = !t.end_date;
+    const statusBadge = isOngoing
+      ? `<span class="badge badge-trip-ongoing">🟢 W trasie</span>`
+      : `<span class="badge badge-trip-finished">Zakończona</span>`;
+
+    const finishBtn = isOngoing
+      ? `<button class="btn btn-primary btn-small" data-trip-action="finish" data-id="${t.id}">Zakończ zjazd</button>`
+      : "";
+
+    tr.innerHTML = `
+      <td data-label="ID">#${t.id}</td>
+      <td data-label="Kierowca"><strong>${escapeHtml(t.driver_name)}</strong></td>
+      <td data-label="Data od">${t.start_date || "-"}</td>
+      <td data-label="Data do">${t.end_date || "—"}</td>
+      <td data-label="Dni">${t.days_count != null ? t.days_count + " dni" : "—"}</td>
+      <td data-label="Opis">${escapeHtml(t.description || "-")}</td>
+      <td data-label="Status">${statusBadge}</td>
+      <td data-label="Akcje">
+        <div class="row-actions">
+          ${finishBtn}
+          <button class="btn btn-secondary btn-small" data-trip-action="delete" data-id="${t.id}" style="color:var(--color-danger)">Usuń</button>
+        </div>
+      </td>
+    `;
+    tripsTbody.appendChild(tr);
+  });
+}
+
+if (tripsFilterDriver) tripsFilterDriver.addEventListener("change", renderTripsTable);
+if (tripsFilterMonth) tripsFilterMonth.addEventListener("change", renderTripsTable);
+
+if (tripsTbody) {
+  tripsTbody.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-trip-action]");
+    if (!btn) return;
+    const action = btn.dataset.tripAction;
+    const id = btn.dataset.id;
+    const trip = allTrips.find((t) => String(t.id) === String(id));
+    if (!trip) return;
+
+    if (action === "finish") {
+      openTripEndModal(trip.id);
+    } else if (action === "delete") {
+      openConfirmModal(
+        `Czy na pewno usunąć wyjazd #${trip.id} kierowcy ${trip.driver_name} (${trip.start_date})?`,
+        async () => {
+          showDriversStatus("Usuwanie wyjazdu...");
+          try {
+            const { error } = await supabaseClient.from("driver_trips").delete().eq("id", trip.id);
+            if (error) throw error;
+            await fetchTrips();
+          } catch (err) {
+            showDriversStatus(err.message, true);
+          }
+        }
+      );
+    }
+  });
+}
+
+// WYJAZD
+if (btnOpenTripStart) {
+  btnOpenTripStart.addEventListener("click", () => {
+    tripStartForm.reset();
+    document.getElementById("trip-start-date").value = new Date().toISOString().slice(0, 10);
+    tripStartModal.classList.remove("hidden");
+  });
+}
+if (btnCancelTripStart) btnCancelTripStart.addEventListener("click", () => tripStartModal.classList.add("hidden"));
+
+if (tripStartForm) {
+  tripStartForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const driver = document.getElementById("trip-start-driver").value;
+    const startDate = document.getElementById("trip-start-date").value;
+    const desc = document.getElementById("trip-start-desc").value.trim();
+
+    if (!driver || !startDate) return;
+
+    showDriversStatus("Rejestracja wyjazdu...");
+    try {
+      const { error } = await supabaseClient.from("driver_trips").insert({
+        driver_name: driver,
+        start_date: startDate,
+        description: desc || null,
+      });
+
+      if (error) throw error;
+      tripStartModal.classList.add("hidden");
+      await fetchTrips();
+    } catch (err) {
+      showDriversStatus(err.message, true);
+    }
+  });
+}
+
+// ZJAZD
+function openTripEndModal(selectedTripId = null) {
+  if (!tripEndModal) return;
+  const activeTrips = allTrips.filter((t) => !t.end_date);
+
+  if (activeTrips.length === 0) {
+    alert("Brak kierowców będących obecnie w trasie.");
+    return;
+  }
+
+  tripEndActiveSelect.innerHTML = activeTrips.map((t) => `
+    <option value="${t.id}" ${selectedTripId && String(t.id) === String(selectedTripId) ? "selected" : ""}>
+      ${escapeHtml(t.driver_name)} (od ${t.start_date}${t.description ? ` - ${escapeHtml(t.description)}` : ""})
+    </option>
+  `).join("");
+
+  document.getElementById("trip-end-date").value = new Date().toISOString().slice(0, 10);
+  tripEndModal.classList.remove("hidden");
+}
+
+if (btnOpenTripEnd) btnOpenTripEnd.addEventListener("click", () => openTripEndModal());
+if (btnCancelTripEnd) btnCancelTripEnd.addEventListener("click", () => tripEndModal.classList.add("hidden"));
+
+if (tripEndForm) {
+  tripEndForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const tripId = tripEndActiveSelect.value;
+    const endDate = document.getElementById("trip-end-date").value;
+    const trip = allTrips.find((t) => String(t.id) === String(tripId));
+
+    if (!trip || !endDate) return;
+
+    const sMs = new Date(trip.start_date).getTime();
+    const eMs = new Date(endDate).getTime();
+    const daysCount = Math.max(1, Math.round((eMs - sMs) / (1000 * 60 * 60 * 24)) + 1);
+
+    showDriversStatus("Zapisywanie zjazdu...");
+    try {
+      const { error } = await supabaseClient
+        .from("driver_trips")
+        .update({
+          end_date: endDate,
+          days_count: daysCount,
+        })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+      tripEndModal.classList.add("hidden");
+      await fetchTrips();
+    } catch (err) {
+      showDriversStatus(err.message, true);
+    }
+  });
+}
+
+// TRASA ARCHIWALNA
+if (btnOpenTripManual) {
+  btnOpenTripManual.addEventListener("click", () => {
+    tripManualForm.reset();
+    document.getElementById("trip-manual-start").value = new Date().toISOString().slice(0, 10);
+    document.getElementById("trip-manual-end").value = new Date().toISOString().slice(0, 10);
+    tripManualModal.classList.remove("hidden");
+  });
+}
+if (btnCancelTripManual) btnCancelTripManual.addEventListener("click", () => tripManualModal.classList.add("hidden"));
+
+if (tripManualForm) {
+  tripManualForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const driver = document.getElementById("trip-manual-driver").value;
+    const startDate = document.getElementById("trip-manual-start").value;
+    const endDate = document.getElementById("trip-manual-end").value;
+    const desc = document.getElementById("trip-manual-desc").value.trim();
+
+    if (!driver || !startDate || !endDate) return;
+
+    const sMs = new Date(startDate).getTime();
+    const eMs = new Date(endDate).getTime();
+    const daysCount = Math.max(1, Math.round((eMs - sMs) / (1000 * 60 * 60 * 24)) + 1);
+
+    showDriversStatus("Dodawanie trasy...");
+    try {
+      const { error } = await supabaseClient.from("driver_trips").insert({
+        driver_name: driver,
+        start_date: startDate,
+        end_date: endDate,
+        days_count: daysCount,
+        description: desc || null,
+      });
+
+      if (error) throw error;
+      tripManualModal.classList.add("hidden");
+      await fetchTrips();
+    } catch (err) {
+      showDriversStatus(err.message, true);
+    }
+  });
+}
+
+// =========================================================================
+// MODUŁ: ZARZĄDZANIE POJAZDAMI (replika komend: pojazdy, pojazd_dodaj)
+// =========================================================================
+const vehiclesStatusEl = document.getElementById("vehicles-status");
+const vehiclesTbody = document.getElementById("vehicles-tbody");
+const btnOpenAddVehicle = document.getElementById("btn-open-add-vehicle");
+const vehicleFormModal = document.getElementById("vehicle-form-modal");
+const vehicleForm = document.getElementById("vehicle-form");
+const btnCancelVehicleForm = document.getElementById("btn-cancel-vehicle-form");
+
+function showVehiclesStatus(msg, isError = false) {
+  if (!vehiclesStatusEl) return;
+  vehiclesStatusEl.textContent = msg;
+  vehiclesStatusEl.className = `status-bar ${isError ? "error" : "loading"}`.trim();
+}
+
+function clearVehiclesStatus() {
+  if (!vehiclesStatusEl) return;
+  vehiclesStatusEl.textContent = "";
+  vehiclesStatusEl.className = "status-bar";
+}
+
+async function loadVehiclesView() {
+  await fetchVehiclesList();
+}
+
+async function fetchVehiclesList() {
+  showVehiclesStatus("Wczytywanie pojazdów...");
+  try {
+    const { data, error } = await supabaseClient.from("vehicles").select("*").order("name");
+    if (error) throw error;
+    allVehicles = data || [];
+    renderVehiclesTable();
+    updateVehicleSelects();
+    clearVehiclesStatus();
+  } catch (err) {
+    console.error(err);
+    showVehiclesStatus("Błąd wczytywania pojazdów: " + err.message, true);
+  }
+}
+
+function renderVehiclesTable() {
+  if (!vehiclesTbody) return;
+  vehiclesTbody.innerHTML = "";
+
+  if (!allVehicles.length) {
+    vehiclesTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#6b7280;">Brak zdefiniowanych pojazdów w bazie.</td></tr>`;
+    return;
+  }
+
+  allVehicles.forEach((v) => {
+    const tr = document.createElement("tr");
+    const activeBadge = v.active
+      ? `<span class="badge badge-active">Aktywny</span>`
+      : `<span class="badge badge-inactive">Nieaktywny</span>`;
+
+    tr.innerHTML = `
+      <td data-label="ID">#${v.id}</td>
+      <td data-label="Nazwa"><strong>${escapeHtml(String(v.name).toUpperCase())}</strong></td>
+      <td data-label="Rejestracja">${escapeHtml(v.plate)}</td>
+      <td data-label="Stan">${activeBadge}</td>
+      <td data-label="Akcje">
+        <div class="row-actions">
+          <button class="btn btn-secondary btn-small" data-veh-action="toggle-active" data-id="${v.id}" data-active="${v.active}">
+            ${v.active ? "Wyłącz" : "Włącz"}
+          </button>
+        </div>
+      </td>
+    `;
+    vehiclesTbody.appendChild(tr);
+  });
+}
+
+if (vehiclesTbody) {
+  vehiclesTbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-veh-action]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const v = allVehicles.find((veh) => String(veh.id) === String(id));
+    if (!v) return;
+
+    const cur = btn.dataset.active === "true";
+    showVehiclesStatus("Zmieniam stan pojazdu...");
+    try {
+      const { error } = await supabaseClient.from("vehicles").update({ active: !cur }).eq("id", v.id);
+      if (error) throw error;
+      await fetchVehiclesList();
+      await loadVehiclesAndDrivers();
+    } catch (err) {
+      showVehiclesStatus(err.message, true);
+    }
+  });
+}
+
+if (btnOpenAddVehicle) {
+  btnOpenAddVehicle.addEventListener("click", () => {
+    vehicleForm.reset();
+    vehicleFormModal.classList.remove("hidden");
+  });
+}
+
+if (btnCancelVehicleForm) {
+  btnCancelVehicleForm.addEventListener("click", () => {
+    vehicleFormModal.classList.add("hidden");
+  });
+}
+
+if (vehicleForm) {
+  vehicleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("veh-name-input").value.trim().toLowerCase();
+    const plate = document.getElementById("veh-plate-input").value.trim().toUpperCase();
+
+    if (!name || !plate) return;
+
+    showVehiclesStatus("Dodawanie pojazdu...");
+    try {
+      const { error } = await supabaseClient.from("vehicles").upsert(
+        { name, plate, active: true },
+        { onConflict: "plate" }
+      );
+
+      if (error) throw error;
+      vehicleFormModal.classList.add("hidden");
+      await fetchVehiclesList();
+      await loadVehiclesAndDrivers();
+    } catch (err) {
+      showVehiclesStatus("Błąd dodawania pojazdu: " + err.message, true);
+    }
+  });
+}
 
 // INICJALIZACJA
 // =========================================================================
