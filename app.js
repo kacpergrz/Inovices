@@ -514,19 +514,52 @@ function renderTable(invoices) {
           ? `<span class="badge badge-urgent" title="Termin płatności: ${escapeHtml(invoice.due_date)}">🔥 Pilna</span>`
           : `<span class="badge badge-unpaid">Nieopłacona</span>`);
 
+    const calIcon = `<svg class="cal-mini-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
+
+    tr.className = "invoice-row";
     tr.innerHTML = `
-      <td data-label="Numer faktury">${escapeHtml(invoice.invoice_number || "-")}</td>
-      <td data-label="Numer KSeF">${escapeHtml(invoice.ksef_number || "-")}</td>
-      <td data-label="Sprzedawca">${escapeHtml(invoice.seller_name || "-")}</td>
-      <td data-label="NIP">${escapeHtml(invoice.seller_nip || "-")}</td>
-      <td data-label="Data wystawienia">${invoice.issue_date || "-"}${invoice.service_month ? `<br><span class="badge badge-service-month" title="Przypisano do miesiąca: ${escapeHtml(invoice.service_month)}">Rozl.: ${escapeHtml(invoice.service_month)}</span>` : ""}</td>
-      <td data-label="Termin płatności">${invoice.due_date || "-"}</td>
-      <td data-label="Netto">${formatAmount(invoice.net_amount, invoice.currency)}</td>
-      <td data-label="Brutto">${formatAmount(invoice.gross_amount, invoice.currency)}</td>
-      <td data-label="Waluta">${escapeHtml(invoice.currency || "-")}</td>
-      <td data-label="Status">${statusBadge}</td>
-      <td data-label="Pojazd">${renderVehicleBadge(invoice)}</td>
-      <td data-label="Akcje">
+      <td class="col-number" data-label="Numer faktury">
+        <span class="inv-number-title">${escapeHtml(invoice.invoice_number || "-")}</span>
+      </td>
+      <td class="col-ksef" data-label="Numer KSeF">
+        ${invoice.ksef_number ? `<span class="ksef-pill" title="${escapeHtml(invoice.ksef_number)}"><span class="ksef-tag">KSeF</span><span class="ksef-code">${escapeHtml(invoice.ksef_number)}</span></span>` : `<span class="ksef-empty">-</span>`}
+      </td>
+      <td class="col-seller" data-label="Sprzedawca">
+        <div class="seller-card-group">
+          <span class="seller-title">${escapeHtml(invoice.seller_name || "-")}</span>
+          <span class="seller-nip-sub">NIP: ${escapeHtml(invoice.seller_nip || "-")}</span>
+        </div>
+      </td>
+      <td class="col-nip" data-label="NIP">${escapeHtml(invoice.seller_nip || "-")}</td>
+      <td class="col-issue-date" data-label="Data wystawienia">
+        <div class="date-chip-wrapper">
+          <span class="date-chip" title="Data wystawienia">
+            ${calIcon}
+            <span class="date-chip-label">Wyst.:</span>
+            <span class="date-chip-val">${invoice.issue_date || "-"}</span>
+          </span>
+          ${invoice.service_month ? `<span class="badge badge-service-month" title="Przypisano do miesiąca: ${escapeHtml(invoice.service_month)}">Rozl.: ${escapeHtml(invoice.service_month)}</span>` : ""}
+        </div>
+      </td>
+      <td class="col-due-date" data-label="Termin płatności">
+        <span class="date-chip ${isUrgent ? 'urgent' : ''}" title="Termin płatności">
+          ${calIcon}
+          <span class="date-chip-label">Termin:</span>
+          <span class="date-chip-val">${invoice.due_date || "-"}</span>
+        </span>
+      </td>
+      <td class="col-net" data-label="Netto">
+        <span class="amount-sublabel">Netto</span>
+        <span class="net-amount-val">${formatAmount(invoice.net_amount, invoice.currency)}</span>
+      </td>
+      <td class="col-gross" data-label="Brutto">
+        <span class="amount-sublabel">Brutto</span>
+        <span class="gross-amount-val">${formatAmount(invoice.gross_amount, invoice.currency)}</span>
+      </td>
+      <td class="col-currency" data-label="Waluta">${escapeHtml(invoice.currency || "-")}</td>
+      <td class="col-status" data-label="Status">${statusBadge}</td>
+      <td class="col-vehicle" data-label="Pojazd">${renderVehicleBadge(invoice)}</td>
+      <td class="col-actions" data-label="Akcje">
         <div class="row-actions">
           <button class="btn btn-secondary btn-small" data-action="set-vehicle" data-id="${invoice.id}">Pojazd</button>
           <button class="btn btn-secondary btn-small" data-action="set-service-month" data-id="${invoice.id}">Miesiąc</button>
