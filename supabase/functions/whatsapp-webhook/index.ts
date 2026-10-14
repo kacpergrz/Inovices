@@ -1041,6 +1041,16 @@ function inferPaymentDays(inv: any, rules?: RuleMap): number | null {
     if (Number.isInteger(days) && days >= 0) return days;
   }
 
+  // Jeśli termin płatności i data wystawienia są znane (np. z XML KSeF), wylicz liczbę dni terminu
+  if (inv?.due_date && inv?.issue_date) {
+    const issueTime = new Date(inv.issue_date).getTime();
+    const dueTime = new Date(inv.due_date).getTime();
+    if (!isNaN(issueTime) && !isNaN(dueTime)) {
+      const diffDays = Math.round((dueTime - issueTime) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0) return diffDays;
+    }
+  }
+
   return rules ? rulePaymentDays(inv, rules) : null;
 }
 function inferDueDate(inv: any, rules?: RuleMap) {
@@ -1151,7 +1161,12 @@ async function fetchInvoicesFromBroker(params: { daysBack?: number; from?: strin
   return Array.isArray(data?.invoices) ? data.invoices : [];
 }
 
-async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<string, string | null>> {
+interface XmlInvoiceData {
+  saleDate: string | null;
+  dueDate: string | null;
+}
+
+async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<string, XmlInvoiceData>> {
   if (!ksefNumbers || ksefNumbers.length === 0) return {};
 
   let brokerBaseUrl = (Deno.env.get("KSEF_BROKER_URL") ?? "").trim();
@@ -1176,19 +1191,43 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
     });
 
     if (!res.ok) {
-      console.warn(`[KSeF Broker XML] Błąd ${res.status} pobierania dat sprzedaży:`, await res.text());
+      console.warn(`[KSeF Broker XML] Błąd ${res.status} pobierania danych XML:`, await res.text());
       return {};
     }
 
     const data = await res.json();
-    return (data && typeof data.dates === "object" && data.dates) ? data.dates : {};
+    const result: Record<string, XmlInvoiceData> = {};
+
+    if (data && typeof data.invoicesData === "object" && data.invoicesData) {
+      for (const [key, val] of Object.entries(data.invoicesData as Record<string, any>)) {
+        result[key] = {
+          saleDate: val?.saleDate ?? null,
+          dueDate: val?.dueDate ?? null,
+        };
+      }
+      return result;
+    }
+
+    const dates = (data && typeof data.dates === "object" && data.dates) ? data.dates : {};
+    const dueDates = (data && typeof data.dueDates === "object" && data.dueDates) ? data.dueDates : {};
+
+    for (const num of ksefNumbers) {
+      const saleVal = dates[num];
+      const dueVal = dueDates[num];
+      result[num] = {
+        saleDate: typeof saleVal === "string" ? saleVal : (saleVal?.saleDate ?? null),
+        dueDate: typeof dueVal === "string" ? dueVal : (saleVal?.dueDate ?? null),
+      };
+    }
+
+    return result;
   } catch (err: any) {
     console.warn("[KSeF Broker XML] Błąd wywołania /fetch-xml-dates:", err.message);
     return {};
   }
 }
 
-async function getNewInvoicesXmlDates(invoices: any[]): Promise<Record<string, string | null>> {
+async function getNewInvoicesXmlDates(invoices: any[]): Promise<Record<string, XmlInvoiceData>> {
   const ksefNumbersToCheck = invoices.map((inv: any) => inv.ksef_number).filter(Boolean);
   if (ksefNumbersToCheck.length === 0) return {};
 
@@ -1487,9 +1526,21 @@ if (
 
           const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
-          const saleDate = xmlDatesMap[inv.ksef_number] || inv.sale_date || null;
+          const xmlInfo = xmlDatesMap[inv.ksef_number];
+          const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+            ? xmlInfo.saleDate
+            : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
+          const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+            ? xmlInfo.dueDate
+            : null;
+
           const effectiveDate = saleDate || inv.issue_date || null;
           const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+
+          const invWithDueDate = {
+            ...inv,
+            due_date: ksefDueDate || inv.due_date || null,
+          };
 
           return {
             ksef_number: inv.ksef_number || null,
@@ -1497,8 +1548,8 @@ if (
             invoice_number: inv.invoice_number || null,
             issue_date: inv.issue_date || null,
             service_month: serviceMonth,
-            due_date: inferDueDate(inv, rules),
-            payment_days: inferPaymentDays(inv, rules),
+            due_date: inferDueDate(invWithDueDate, rules),
+            payment_days: inferPaymentDays(invWithDueDate, rules),
             gross_amount: inv.gross_amount ?? null,
             net_amount: inv.net_amount ?? null,
             currency: inv.currency || "PLN",
@@ -2242,9 +2293,21 @@ const payloadToInsert = invoices.map((inv: any) => {
 
   const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
-  const saleDate = xmlDatesMap[inv.ksef_number] || inv.sale_date || null;
+  const xmlInfo = xmlDatesMap[inv.ksef_number];
+  const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+    ? xmlInfo.saleDate
+    : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
+  const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+    ? xmlInfo.dueDate
+    : null;
+
   const effectiveDate = saleDate || inv.issue_date || null;
   const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+
+  const invWithDueDate = {
+    ...inv,
+    due_date: ksefDueDate || inv.due_date || null,
+  };
 
   return {
     ksef_number: inv.ksef_number || null,
@@ -2252,8 +2315,8 @@ const payloadToInsert = invoices.map((inv: any) => {
     invoice_number: inv.invoice_number || null,
     issue_date: inv.issue_date || null,
     service_month: serviceMonth,
-    due_date: inferDueDate(inv, rules),
-    payment_days: inferPaymentDays(inv, rules),
+    due_date: inferDueDate(invWithDueDate, rules),
+    payment_days: inferPaymentDays(invWithDueDate, rules),
     gross_amount: inv.gross_amount ?? null,
     net_amount: inv.net_amount ?? null,
     currency: inv.currency || "PLN",
