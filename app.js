@@ -575,6 +575,13 @@ function renderTable(invoices) {
     tr.innerHTML = `
       <td class="col-number" data-label="Numer faktury">
         <span class="inv-number-title">${escapeHtml(invoice.invoice_number || "-")}</span>
+        ${invoice.order_number ? `
+          <div class="inv-order-pill" title="Numer zlecenia: ${escapeHtml(invoice.order_number)}">
+            <span class="inv-order-tag">ZLEC:</span>
+            <span class="inv-order-code">${escapeHtml(invoice.order_number)}</span>
+            ${invoice.order_file_url ? `<button type="button" class="btn-order-file-mini" data-action="view-order" data-id="${invoice.id}" title="Pobierz plik zlecenia: ${escapeHtml(invoice.order_file_name || 'Zlecenie')}">📎</button>` : ""}
+          </div>
+        ` : ""}
       </td>
       <td class="col-ksef" data-label="Numer KSeF">
         ${invoice.ksef_number ? `<span class="ksef-pill" title="${escapeHtml(invoice.ksef_number)}"><span class="ksef-tag">KSeF</span><span class="ksef-code">${escapeHtml(invoice.ksef_number)}</span></span>` : `<span class="ksef-empty">-</span>`}
@@ -688,6 +695,11 @@ function openInvoiceForm(invoice) {
     fServiceMonth.value = invoice ? invoice.service_month || "" : "";
   }
 
+  const fOrderNumber = document.getElementById("f-order-number");
+  if (fOrderNumber) {
+    fOrderNumber.value = invoice ? invoice.order_number || "" : "";
+  }
+
   updateNbpPreview();
   invoiceFormModal.classList.remove("hidden");
 }
@@ -706,9 +718,14 @@ invoiceForm.addEventListener("submit", (e) => {
     ? document.getElementById("f-service-month").value.trim()
     : "";
 
+  const orderNumberRaw = document.getElementById("f-order-number")
+    ? document.getElementById("f-order-number").value.trim()
+    : "";
+
   const formData = {
     invoice_number: document.getElementById("f-invoice-number").value,
     ksef_number: document.getElementById("f-ksef-number").value || null,
+    order_number: orderNumberRaw || null,
     seller_name: document.getElementById("f-seller-name").value,
     seller_nip: document.getElementById("f-seller-nip").value,
     issue_date: document.getElementById("f-issue-date").value,
