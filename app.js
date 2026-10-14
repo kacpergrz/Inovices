@@ -53,6 +53,24 @@ const errServiceMonthModal = document.getElementById("err-service-month-modal");
 const btnSaveServiceMonth = document.getElementById("btn-save-service-month");
 const btnCancelServiceMonth = document.getElementById("btn-cancel-service-month");
 
+const btnOpenOrdersUpload = document.getElementById("btn-open-orders-upload");
+const ordersModal = document.getElementById("orders-modal");
+const ordersDropZone = document.getElementById("orders-drop-zone");
+const ordersFilesInput = document.getElementById("orders-files-input");
+const ordersPreviewContainer = document.getElementById("orders-preview-container");
+const ordersPreviewCount = document.getElementById("orders-preview-count");
+const ordersPreviewTbody = document.getElementById("orders-preview-tbody");
+const btnSaveOrdersBatch = document.getElementById("btn-save-orders-batch");
+const btnCancelOrdersModal = document.getElementById("btn-cancel-orders-modal");
+const errOrdersModal = document.getElementById("err-orders-modal");
+
+let parsedOrdersQueue = [];
+let targetOrderInvoiceId = null;
+
+if (typeof pdfjsLib !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
 const loginView = document.getElementById("login-view");
 const appView = document.getElementById("app-view");
 const resultsView = document.getElementById("results-view");
@@ -294,7 +312,7 @@ async function fetchInvoices() {
     const { data, error } = await supabaseClient
       .from(TABLE_NAME)
       .select(
-        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month"
+        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month, order_number, order_file_url, order_file_name"
       );
 
     if (error) throw error;
@@ -490,12 +508,49 @@ function renderVehicleBadge(invoice) {
   return `<span class="badge badge-unassigned">Nieprzypisany</span>`;
 }
 
+function renderOrderCell(invoice) {
+  const num = invoice.order_number ? escapeHtml(invoice.order_number) : "";
+  const hasFile = Boolean(invoice.order_file_url);
+  const fileName = invoice.order_file_name || "Zlecenie";
+
+  if (hasFile) {
+    return `
+      <div class="order-cell-content">
+        ${num ? `<span class="badge badge-order" title="Nr zlecenia: ${num}">📄 ${num}</span>` : ""}
+        <button type="button" class="btn btn-secondary btn-small" data-action="view-order" data-id="${invoice.id}" title="Pobierz/zobacz plik: ${escapeHtml(fileName)}">
+          📎 Pobierz
+        </button>
+      </div>
+    `;
+  }
+
+  if (num) {
+    return `
+      <div class="order-cell-content">
+        <span class="badge badge-order" title="Nr zlecenia z KSeF: ${num}">📄 ${num}</span>
+        <button type="button" class="btn btn-secondary btn-small" data-action="attach-order" data-id="${invoice.id}" title="Dołącz plik PDF/DOCX do tego zlecenia">
+          + Plik
+        </button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="order-cell-content">
+      <span class="order-empty">-</span>
+      <button type="button" class="btn btn-secondary btn-small" data-action="attach-order" data-id="${invoice.id}" title="Dołącz zlecenie (PDF/DOCX)">
+        + Zlecenie
+      </button>
+    </div>
+  `;
+}
+
 function renderTable(invoices) {
   tbodyEl.innerHTML = "";
 
   if (!invoices.length) {
     const emptyRow = document.createElement("tr");
-    emptyRow.innerHTML = `<td colspan="12" style="text-align:center; color:#6b7280;">Brak faktur do wyświetlenia.</td>`;
+    emptyRow.innerHTML = `<td colspan="13" style="text-align:center; color:#6b7280;">Brak faktur do wyświetlenia.</td>`;
     tbodyEl.appendChild(emptyRow);
     return;
   }
@@ -523,6 +578,9 @@ function renderTable(invoices) {
       </td>
       <td class="col-ksef" data-label="Numer KSeF">
         ${invoice.ksef_number ? `<span class="ksef-pill" title="${escapeHtml(invoice.ksef_number)}"><span class="ksef-tag">KSeF</span><span class="ksef-code">${escapeHtml(invoice.ksef_number)}</span></span>` : `<span class="ksef-empty">-</span>`}
+      </td>
+      <td class="col-order" data-label="Zlecenie">
+        ${renderOrderCell(invoice)}
       </td>
       <td class="col-seller" data-label="Sprzedawca">
         <div class="seller-card-group">
@@ -789,6 +847,10 @@ tbodyEl.addEventListener("click", (e) => {
     openDueDateModal(invoice);
   } else if (action === "set-service-month") {
     openServiceMonthModal(invoice);
+  } else if (action === "view-order") {
+    downloadOrViewOrderFile(invoice);
+  } else if (action === "attach-order") {
+    openOrdersModal(invoice);
   }
 });
 
@@ -2077,6 +2139,412 @@ if (btnExecuteKsefSync) {
       if (ksefProgressMsg) ksefProgressMsg.textContent = "";
     } finally {
       btnExecuteKsefSync.disabled = false;
+    }
+  });
+}
+
+// =========================================================================
+// MODUŁ: ZLECENIA TRANSPORTOWE (ODCZYT PDF/DOCX, DOPASOWYWANIE I SUPABASE STORAGE)
+// =========================================================================
+
+async function downloadOrViewOrderFile(invoice) {
+  if (!invoice || !invoice.order_file_url) return;
+  showLoading("Otwieranie pliku zlecenia...");
+  try {
+    const { data, error } = await supabaseClient
+      .storage
+      .from("orders")
+      .createSignedUrl(invoice.order_file_url, 300);
+
+    if (error) {
+      const { data: pubData } = supabaseClient
+        .storage
+        .from("orders")
+        .getPublicUrl(invoice.order_file_url);
+
+      if (pubData && pubData.publicUrl) {
+        window.open(pubData.publicUrl, "_blank");
+        clearStatus();
+        return;
+      }
+      throw error;
+    }
+
+    if (data && data.signedUrl) {
+      window.open(data.signedUrl, "_blank");
+      clearStatus();
+    } else {
+      throw new Error("Nie udało się uzyskać adresu pliku.");
+    }
+  } catch (err) {
+    console.error(err);
+    showError("Błąd pobierania pliku: " + (err.message || "Brak dostępu do bucketu 'orders'."));
+  }
+}
+
+function cleanOrderNumber(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const cleaned = raw.trim().replace(/^[:\s\.\,\;\\/\-]+|[:\s\.\,\;\\/\-]+$/g, "");
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function extractOrderNumberFromText(text) {
+  if (!text || typeof text !== "string") return null;
+
+  const patterns = [
+    /\b(?:zlecen(?:ie|ia)?\s+transportow(?:e|ego)|zlec\.?\s*transp\.?)\s*(?:nr|numer)?[\s:\.\/]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:zlecen(?:ie|ia)?|zlec\.)\s*(?:nr|numer)[\s:\.\/]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:nr|numer)\s*zlecenia(?:\s+transportowego)?[\s:\.\/]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\bzlecenie[\s:]+([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:order|po)\s*(?:no|nr|number|ref)?[\s:\.\/]+([A-Za-z0-9\/\-_\.]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const candidate = cleanOrderNumber(match[1]);
+      if (candidate) return candidate;
+    }
+  }
+
+  return null;
+}
+
+function extractOrderNumberFromFileName(fileName) {
+  if (!fileName) return null;
+  const baseName = fileName.replace(/\.[^/.]+$/, "");
+  return extractOrderNumberFromText(baseName);
+}
+
+async function extractTextFromPdf(file) {
+  if (typeof pdfjsLib === "undefined") {
+    throw new Error("Biblioteka PDF.js nie została załadowana.");
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  let fullText = "";
+
+  const maxPages = Math.min(pdf.numPages, 5);
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map((item) => item.str);
+    fullText += strings.join(" ") + "\n";
+  }
+
+  return fullText;
+}
+
+async function extractTextFromDocx(file) {
+  if (typeof mammoth === "undefined") {
+    throw new Error("Biblioteka Mammoth.js nie została załadowana.");
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value || "";
+}
+
+function normalizeOrderForComparison(str) {
+  return String(str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function findMatchingInvoiceForOrder(orderNumber) {
+  if (!orderNumber || !allInvoices.length) return null;
+  const normTarget = normalizeOrderForComparison(orderNumber);
+  if (!normTarget) return null;
+
+  // 1. Dokładne dopasowanie do order_number pobranego z KSeF
+  const exact = allInvoices.find((inv) => {
+    if (!inv.order_number) return false;
+    return normalizeOrderForComparison(inv.order_number) === normTarget;
+  });
+  if (exact) return exact;
+
+  // 2. Jeśli numer zlecenia zawiera się w numerze faktury (lub odwrotnie)
+  const byInvoiceNumber = allInvoices.find((inv) => {
+    if (!inv.invoice_number) return false;
+    const normInv = normalizeOrderForComparison(inv.invoice_number);
+    return normInv.includes(normTarget) || normTarget.includes(normInv);
+  });
+  if (byInvoiceNumber) return byInvoiceNumber;
+
+  return null;
+}
+
+function openOrdersModal(targetInvoice = null) {
+  targetOrderInvoiceId = targetInvoice ? targetInvoice.id : null;
+  parsedOrdersQueue = [];
+  if (errOrdersModal) errOrdersModal.textContent = "";
+  if (ordersFilesInput) ordersFilesInput.value = "";
+  if (ordersPreviewContainer) ordersPreviewContainer.classList.add("hidden");
+  if (ordersPreviewTbody) ordersPreviewTbody.innerHTML = "";
+  if (ordersPreviewCount) ordersPreviewCount.textContent = "0";
+  if (btnSaveOrdersBatch) {
+    btnSaveOrdersBatch.disabled = true;
+    btnSaveOrdersBatch.textContent = "💾 Zapisz i przypisz do faktur";
+  }
+  if (ordersModal) ordersModal.classList.remove("hidden");
+}
+
+function closeOrdersModal() {
+  if (ordersModal) ordersModal.classList.add("hidden");
+  parsedOrdersQueue = [];
+  targetOrderInvoiceId = null;
+  if (errOrdersModal) errOrdersModal.textContent = "";
+}
+
+async function handleOrdersFilesSelected(files) {
+  if (!files || !files.length) return;
+  if (errOrdersModal) errOrdersModal.textContent = "";
+  showLoading(`Przetwarzanie ${files.length} plików zleceń...`);
+
+  const targetInvoice = targetOrderInvoiceId
+    ? allInvoices.find((inv) => String(inv.id) === String(targetOrderInvoiceId))
+    : null;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      let text = "";
+      if (ext === "pdf") {
+        text = await extractTextFromPdf(file);
+      } else if (ext === "docx") {
+        text = await extractTextFromDocx(file);
+      }
+
+      let orderNumber = extractOrderNumberFromText(text);
+      if (!orderNumber) {
+        orderNumber = extractOrderNumberFromFileName(file.name);
+      }
+
+      let matchedInv = null;
+      if (targetInvoice) {
+        matchedInv = targetInvoice;
+      } else if (orderNumber) {
+        matchedInv = findMatchingInvoiceForOrder(orderNumber);
+      }
+
+      parsedOrdersQueue.push({
+        id: "order-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+        file,
+        fileName: file.name,
+        fileSize: (file.size / 1024).toFixed(1) + " KB",
+        orderNumber: orderNumber || "",
+        matchedInvoiceId: matchedInv ? matchedInv.id : null,
+      });
+    } catch (err) {
+      console.warn("Błąd parsowania pliku " + file.name + ":", err);
+      parsedOrdersQueue.push({
+        id: "order-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+        file,
+        fileName: file.name,
+        fileSize: (file.size / 1024).toFixed(1) + " KB",
+        orderNumber: extractOrderNumberFromFileName(file.name) || "",
+        matchedInvoiceId: targetInvoice ? targetInvoice.id : null,
+      });
+    }
+  }
+
+  clearStatus();
+  renderOrdersPreviewQueue();
+}
+
+function renderOrdersPreviewQueue() {
+  if (!ordersPreviewTbody || !ordersPreviewContainer) return;
+
+  ordersPreviewTbody.innerHTML = "";
+  if (!parsedOrdersQueue.length) {
+    ordersPreviewContainer.classList.add("hidden");
+    if (btnSaveOrdersBatch) btnSaveOrdersBatch.disabled = true;
+    return;
+  }
+
+  ordersPreviewContainer.classList.remove("hidden");
+  if (ordersPreviewCount) ordersPreviewCount.textContent = String(parsedOrdersQueue.length);
+
+  parsedOrdersQueue.forEach((item, index) => {
+    const tr = document.createElement("tr");
+
+    let optionsHtml = `<option value="">-- Wybierz fakturę ręcznie --</option>`;
+    allInvoices.forEach((inv) => {
+      const isSelected = String(inv.id) === String(item.matchedInvoiceId);
+      const orderLabel = inv.order_number ? ` [KSeF: ${escapeHtml(inv.order_number)}]` : "";
+      const invLabel = `${escapeHtml(inv.invoice_number || "-")} (${escapeHtml(inv.seller_name || "-")}, ${formatAmount(inv.gross_amount, inv.currency)})${orderLabel}`;
+      optionsHtml += `<option value="${inv.id}" ${isSelected ? "selected" : ""}>${invLabel}</option>`;
+    });
+
+    const statusBadge = item.matchedInvoiceId
+      ? `<span class="badge badge-paid">✅ Dopasowano</span>`
+      : `<span class="badge badge-unpaid">⚠️ Brak dopasowania</span>`;
+
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight: 600; color: #1e293b; font-size: 0.88rem;">${escapeHtml(item.fileName)}</div>
+        <div style="font-size: 0.75rem; color: #64748b;">${item.fileSize}</div>
+      </td>
+      <td>
+        <input type="text" class="input-order-num" data-index="${index}" value="${escapeHtml(item.orderNumber)}" placeholder="Wpisz nr zlecenia" style="width: 100%; min-width: 130px; padding: 4px 8px; font-size: 0.85rem;" />
+      </td>
+      <td>
+        <select class="select-order-inv" data-index="${index}" style="width: 100%; min-width: 200px; padding: 4px 8px; font-size: 0.85rem;">
+          ${optionsHtml}
+        </select>
+      </td>
+      <td>${statusBadge}</td>
+      <td style="text-align: center;">
+        <button type="button" class="btn btn-secondary btn-small btn-remove-order" data-index="${index}" title="Usuń z listy">✕</button>
+      </td>
+    `;
+
+    ordersPreviewTbody.appendChild(tr);
+  });
+
+  const hasAnyMatch = parsedOrdersQueue.some((item) => item.matchedInvoiceId);
+  if (btnSaveOrdersBatch) btnSaveOrdersBatch.disabled = !hasAnyMatch;
+}
+
+if (ordersPreviewTbody) {
+  ordersPreviewTbody.addEventListener("input", (e) => {
+    if (e.target.classList.contains("input-order-num")) {
+      const idx = Number(e.target.dataset.index);
+      if (parsedOrdersQueue[idx]) {
+        parsedOrdersQueue[idx].orderNumber = e.target.value.trim();
+        if (!parsedOrdersQueue[idx].matchedInvoiceId && parsedOrdersQueue[idx].orderNumber) {
+          const autoMatch = findMatchingInvoiceForOrder(parsedOrdersQueue[idx].orderNumber);
+          if (autoMatch) {
+            parsedOrdersQueue[idx].matchedInvoiceId = autoMatch.id;
+            renderOrdersPreviewQueue();
+            return;
+          }
+        }
+      }
+    }
+  });
+
+  ordersPreviewTbody.addEventListener("change", (e) => {
+    if (e.target.classList.contains("select-order-inv")) {
+      const idx = Number(e.target.dataset.index);
+      if (parsedOrdersQueue[idx]) {
+        parsedOrdersQueue[idx].matchedInvoiceId = e.target.value ? e.target.value : null;
+        renderOrdersPreviewQueue();
+      }
+    }
+  });
+
+  ordersPreviewTbody.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-remove-order");
+    if (btn) {
+      const idx = Number(btn.dataset.index);
+      parsedOrdersQueue.splice(idx, 1);
+      renderOrdersPreviewQueue();
+    }
+  });
+}
+
+async function saveOrdersBatch() {
+  const toSave = parsedOrdersQueue.filter((item) => item.matchedInvoiceId);
+  if (!toSave.length) {
+    if (errOrdersModal) errOrdersModal.textContent = "Przypisz przynajmniej jedno zlecenie do faktury przed zapisem.";
+    return;
+  }
+
+  if (btnSaveOrdersBatch) {
+    btnSaveOrdersBatch.disabled = true;
+    btnSaveOrdersBatch.textContent = "Zapisywanie...";
+  }
+  if (errOrdersModal) errOrdersModal.textContent = "";
+  showLoading(`Zapisywanie ${toSave.length} zleceń...`);
+
+  let successCount = 0;
+  const failErrors = [];
+
+  for (const item of toSave) {
+    try {
+      const invId = item.matchedInvoiceId;
+      const cleanFileName = item.file.name.replace(/[^a-zA-Z0-9\._\-]/g, "_");
+      const filePath = `${invId}/${Date.now()}_${cleanFileName}`;
+
+      const { error: uploadError } = await supabaseClient
+        .storage
+        .from("orders")
+        .upload(filePath, item.file, { upsert: true });
+
+      if (uploadError) {
+        throw new Error(`Upload pliku '${item.file.name}' nie powiódł się: ${uploadError.message}. Upewnij się, że bucket 'orders' istnieje w Supabase Storage.`);
+      }
+
+      const invoice = allInvoices.find((inv) => String(inv.id) === String(invId));
+      const finalOrderNumber = item.orderNumber || (invoice ? invoice.order_number : null) || null;
+
+      const { error: updateError } = await supabaseClient
+        .from(TABLE_NAME)
+        .update({
+          order_number: finalOrderNumber,
+          order_file_url: filePath,
+          order_file_name: item.fileName,
+        })
+        .eq("id", invId);
+
+      if (updateError) throw updateError;
+      successCount++;
+    } catch (err) {
+      console.error(err);
+      failErrors.push(err.message);
+    }
+  }
+
+  clearStatus();
+  if (btnSaveOrdersBatch) {
+    btnSaveOrdersBatch.disabled = false;
+    btnSaveOrdersBatch.textContent = "💾 Zapisz i przypisz do faktur";
+  }
+
+  if (failErrors.length) {
+    if (errOrdersModal) {
+      errOrdersModal.textContent = `Zapisano ${successCount} zleceń. Błędy: ${failErrors.join("; ")}`;
+    }
+    await fetchInvoices();
+  } else {
+    closeOrdersModal();
+    await fetchInvoices();
+  }
+}
+
+if (btnOpenOrdersUpload) btnOpenOrdersUpload.addEventListener("click", () => openOrdersModal(null));
+if (btnCancelOrdersModal) btnCancelOrdersModal.addEventListener("click", closeOrdersModal);
+if (btnSaveOrdersBatch) btnSaveOrdersBatch.addEventListener("click", saveOrdersBatch);
+
+if (ordersDropZone) {
+  ordersDropZone.addEventListener("click", () => {
+    if (ordersFilesInput) ordersFilesInput.click();
+  });
+
+  ordersDropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    ordersDropZone.classList.add("dragover");
+  });
+
+  ordersDropZone.addEventListener("dragleave", () => {
+    ordersDropZone.classList.remove("dragover");
+  });
+
+  ordersDropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    ordersDropZone.classList.remove("dragover");
+    if (e.dataTransfer && e.dataTransfer.files) {
+      handleOrdersFilesSelected(e.dataTransfer.files);
+    }
+  });
+}
+
+if (ordersFilesInput) {
+  ordersFilesInput.addEventListener("change", (e) => {
+    if (e.target.files) {
+      handleOrdersFilesSelected(e.target.files);
     }
   });
 }

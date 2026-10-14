@@ -1164,6 +1164,7 @@ async function fetchInvoicesFromBroker(params: { daysBack?: number; from?: strin
 interface XmlInvoiceData {
   saleDate: string | null;
   dueDate: string | null;
+  orderNumber: string | null;
 }
 
 async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<string, XmlInvoiceData>> {
@@ -1203,6 +1204,7 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
         result[key] = {
           saleDate: val?.saleDate ?? null,
           dueDate: val?.dueDate ?? null,
+          orderNumber: val?.orderNumber ?? null,
         };
       }
       return result;
@@ -1210,13 +1212,16 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
 
     const dates = (data && typeof data.dates === "object" && data.dates) ? data.dates : {};
     const dueDates = (data && typeof data.dueDates === "object" && data.dueDates) ? data.dueDates : {};
+    const orderNumbers = (data && typeof data.orderNumbers === "object" && data.orderNumbers) ? data.orderNumbers : {};
 
     for (const num of ksefNumbers) {
       const saleVal = dates[num];
       const dueVal = dueDates[num];
+      const orderVal = orderNumbers[num];
       result[num] = {
         saleDate: typeof saleVal === "string" ? saleVal : (saleVal?.saleDate ?? null),
-        dueDate: typeof dueVal === "string" ? dueVal : (saleVal?.dueDate ?? null),
+        dueDate: typeof dueVal === "string" ? dueVal : (dueVal?.dueDate ?? null),
+        orderNumber: typeof orderVal === "string" ? orderVal : (orderVal?.orderNumber ?? null),
       };
     }
 
@@ -1533,6 +1538,9 @@ if (
           const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
             ? xmlInfo.dueDate
             : null;
+          const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
+            ? xmlInfo.orderNumber
+            : (inv.order_number || null);
 
           const effectiveDate = saleDate || inv.issue_date || null;
           const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
@@ -1546,6 +1554,7 @@ if (
             ksef_number: inv.ksef_number || null,
             num: inv.invoice_number || inv.ksef_number || null,
             invoice_number: inv.invoice_number || null,
+            order_number: ksefOrderNumber || null,
             issue_date: inv.issue_date || null,
             service_month: serviceMonth,
             due_date: inferDueDate(invWithDueDate, rules),
@@ -2300,6 +2309,9 @@ const payloadToInsert = invoices.map((inv: any) => {
   const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
     ? xmlInfo.dueDate
     : null;
+  const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
+    ? xmlInfo.orderNumber
+    : (inv.order_number || null);
 
   const effectiveDate = saleDate || inv.issue_date || null;
   const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
@@ -2313,6 +2325,7 @@ const payloadToInsert = invoices.map((inv: any) => {
     ksef_number: inv.ksef_number || null,
     num: inv.invoice_number || inv.ksef_number || null,
     invoice_number: inv.invoice_number || null,
+    order_number: ksefOrderNumber || null,
     issue_date: inv.issue_date || null,
     service_month: serviceMonth,
     due_date: inferDueDate(invWithDueDate, rules),
@@ -3640,10 +3653,11 @@ Status: ${item.paid ? "opłacona" : "nieopłacona"}`
         await sendWhatsAppMessage(from, `Nie znaleziono faktury ${command.num}`);
       } else {
         const item = data[0];
+        const orderInfo = item.order_number ? `\nZlecenie: ${item.order_number}` : "";
         await sendWhatsAppMessage(
           from,
           `Faktura: ${item.invoice_number || item.num || "brak"}
-KSeF: ${item.ksef_number || "brak"}
+KSeF: ${item.ksef_number || "brak"}${orderInfo}
 NIP sprzedawcy: ${item.seller_nip || "brak"}
 Sprzedawca: ${item.seller_name || "brak"}
 Data wystawienia: ${item.issue_date || "brak"}

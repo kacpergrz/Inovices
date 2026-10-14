@@ -104,6 +104,16 @@
           </svg>
           <span>Pobierz z KSeF</span>
         </button>
+        <button id="btn-open-orders-upload" class="btn btn-secondary btn-orders-upload" title="Wgraj zlecenia (PDF / DOCX)">
+          <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Wgraj zlecenia</span>
+        </button>
         <button id="btn-open-add" class="btn btn-primary btn-add-invoice">
           <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -121,6 +131,7 @@
           <tr>
             <th>Numer faktury</th>
             <th>Numer KSeF</th>
+            <th>Zlecenie</th>
             <th>Sprzedawca</th>
             <th>NIP</th>
             <th>Data wystawienia</th>
@@ -728,6 +739,52 @@
     </div>
   </div>
 
+  <!-- MODAL: Wgraj zlecenia (PDF / DOCX) -->
+  <div id="orders-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-large">
+      <h2>Wgraj zlecenia transportowe</h2>
+      <p class="rules-hint">
+        Wgraj pliki PDF lub DOCX. System odczyta numer zlecenia z dokumentu i automatycznie dopasuje je do pobranych faktur z KSeF.
+      </p>
+
+      <div class="drop-zone" id="orders-drop-zone">
+        <svg class="drop-zone-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <p class="drop-zone-title">Przeciągnij i upuść pliki PDF lub DOCX tutaj</p>
+        <p class="drop-zone-sub">lub kliknij, aby wybrać z dysku (możesz zaznaczyć wiele plików naraz)</p>
+        <input type="file" id="orders-files-input" multiple accept=".pdf,.docx" class="hidden">
+      </div>
+
+      <div id="orders-preview-container" class="hidden" style="margin-top: 15px;">
+        <h4>Odczytane dokumenty (<span id="orders-preview-count">0</span>):</h4>
+        <div class="table-wrapper" style="max-height: 320px; overflow-y: auto;">
+          <table class="invoices-table" id="orders-preview-table">
+            <thead>
+              <tr>
+                <th>Plik</th>
+                <th>Odczytany nr zlecenia</th>
+                <th>Dopasowana faktura</th>
+                <th>Status</th>
+                <th>Usuń</th>
+              </tr>
+            </thead>
+            <tbody id="orders-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <span class="error-msg" id="err-orders-modal"></span>
+
+      <div class="form-actions" style="margin-top: 20px;">
+        <button type="button" class="btn btn-primary" id="btn-save-orders-batch" disabled>💾 Zapisz i przypisz do faktur</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-orders-modal">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Dodaj / Edytuj koszt -->
   <div id="expense-form-modal" class="modal-overlay hidden">
     <div class="modal-box">
@@ -943,6 +1000,8 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
