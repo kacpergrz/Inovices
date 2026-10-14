@@ -791,6 +791,25 @@
     </div>
   </div>
 
+  <!-- MODAL: Podgląd zlecenia (PDF / DOCX) -->
+  <div id="order-preview-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-preview">
+      <div class="modal-header-preview">
+        <h2 id="order-preview-title" style="margin: 0; font-size: 1.15rem;">Podgląd zlecenia</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-order-preview-x" title="Zamknij podgląd">✕</button>
+      </div>
+      <div id="order-preview-loading" class="nbp-preview" style="margin: 12px 0;">⏳ Wczytywanie dokumentu...</div>
+      <div class="order-preview-body">
+        <iframe id="order-preview-iframe" class="order-preview-frame hidden" title="Podgląd PDF"></iframe>
+        <div id="order-preview-docx-content" class="order-preview-docx-paper hidden"></div>
+      </div>
+      <div class="form-actions" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <a id="order-preview-download-btn" class="btn btn-secondary" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">📥 Pobierz na dysk</a>
+        <button type="button" class="btn btn-primary" id="btn-close-order-preview">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Dodaj / Edytuj koszt -->
   <div id="expense-form-modal" class="modal-overlay hidden">
     <div class="modal-box">

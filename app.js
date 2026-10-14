@@ -64,6 +64,15 @@ const btnSaveOrdersBatch = document.getElementById("btn-save-orders-batch");
 const btnCancelOrdersModal = document.getElementById("btn-cancel-orders-modal");
 const errOrdersModal = document.getElementById("err-orders-modal");
 
+const orderPreviewModal = document.getElementById("order-preview-modal");
+const orderPreviewTitle = document.getElementById("order-preview-title");
+const orderPreviewLoading = document.getElementById("order-preview-loading");
+const orderPreviewIframe = document.getElementById("order-preview-iframe");
+const orderPreviewDocxContent = document.getElementById("order-preview-docx-content");
+const orderPreviewDownloadBtn = document.getElementById("order-preview-download-btn");
+const btnCloseOrderPreview = document.getElementById("btn-close-order-preview");
+const btnCloseOrderPreviewX = document.getElementById("btn-close-order-preview-x");
+
 let parsedOrdersQueue = [];
 let targetOrderInvoiceId = null;
 
@@ -517,8 +526,8 @@ function renderOrderCell(invoice) {
     return `
       <div class="order-cell-content">
         ${num ? `<span class="badge badge-order" title="Nr zlecenia: ${num}">📄 ${num}</span>` : ""}
-        <button type="button" class="btn btn-secondary btn-small" data-action="view-order" data-id="${invoice.id}" title="Pobierz/zobacz plik: ${escapeHtml(fileName)}">
-          📎 Pobierz
+        <button type="button" class="btn btn-primary btn-small" data-action="preview-order" data-id="${invoice.id}" title="Podgląd zlecenia: ${escapeHtml(fileName)}">
+          👁️ Podgląd
         </button>
       </div>
     `;
@@ -579,7 +588,7 @@ function renderTable(invoices) {
           <div class="inv-order-pill" title="Numer zlecenia: ${escapeHtml(invoice.order_number)}">
             <span class="inv-order-tag">ZLEC:</span>
             <span class="inv-order-code">${escapeHtml(invoice.order_number)}</span>
-            ${invoice.order_file_url ? `<button type="button" class="btn-order-file-mini" data-action="view-order" data-id="${invoice.id}" title="Pobierz plik zlecenia: ${escapeHtml(invoice.order_file_name || 'Zlecenie')}">📎</button>` : ""}
+            ${invoice.order_file_url ? `<button type="button" class="btn-order-file-mini" data-action="preview-order" data-id="${invoice.id}" title="Podgląd zlecenia: ${escapeHtml(invoice.order_file_name || 'Zlecenie')}">👁️</button>` : ""}
           </div>
         ` : ""}
       </td>
@@ -866,6 +875,8 @@ tbodyEl.addEventListener("click", (e) => {
     openServiceMonthModal(invoice);
   } else if (action === "view-order") {
     downloadOrViewOrderFile(invoice);
+  } else if (action === "preview-order") {
+    previewOrderFile(invoice);
   } else if (action === "attach-order") {
     openOrdersModal(invoice);
   }
@@ -2164,6 +2175,97 @@ if (btnExecuteKsefSync) {
 // MODUŁ: ZLECENIA TRANSPORTOWE (ODCZYT PDF/DOCX, DOPASOWYWANIE I SUPABASE STORAGE)
 // =========================================================================
 
+function closeOrderPreviewModal() {
+  if (orderPreviewModal) orderPreviewModal.classList.add("hidden");
+  if (orderPreviewIframe) {
+    orderPreviewIframe.src = "about:blank";
+    orderPreviewIframe.classList.add("hidden");
+  }
+  if (orderPreviewDocxContent) {
+    orderPreviewDocxContent.innerHTML = "";
+    orderPreviewDocxContent.classList.add("hidden");
+  }
+  if (orderPreviewLoading) orderPreviewLoading.classList.add("hidden");
+}
+
+async function previewOrderFile(invoice) {
+  if (!invoice || !invoice.order_file_url) return;
+
+  const fileName = invoice.order_file_name || "Zlecenie";
+  const orderNum = invoice.order_number ? ` (Zlecenie: ${invoice.order_number})` : "";
+  if (orderPreviewTitle) {
+    orderPreviewTitle.textContent = `Podgląd: ${fileName}${orderNum}`;
+  }
+
+  if (orderPreviewLoading) {
+    orderPreviewLoading.textContent = "⏳ Przygotowywanie podglądu dokumentu...";
+    orderPreviewLoading.classList.remove("hidden");
+  }
+  if (orderPreviewIframe) {
+    orderPreviewIframe.src = "about:blank";
+    orderPreviewIframe.classList.add("hidden");
+  }
+  if (orderPreviewDocxContent) {
+    orderPreviewDocxContent.innerHTML = "";
+    orderPreviewDocxContent.classList.add("hidden");
+  }
+  if (orderPreviewModal) {
+    orderPreviewModal.classList.remove("hidden");
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .storage
+      .from("orders")
+      .createSignedUrl(invoice.order_file_url, 600);
+
+    let signedUrl = data?.signedUrl;
+    if (error || !signedUrl) {
+      const { data: pubData } = supabaseClient
+        .storage
+        .from("orders")
+        .getPublicUrl(invoice.order_file_url);
+      signedUrl = pubData?.publicUrl;
+    }
+
+    if (!signedUrl) throw new Error("Nie udało się uzyskać adresu pliku ze Storage.");
+
+    if (orderPreviewDownloadBtn) {
+      orderPreviewDownloadBtn.href = signedUrl;
+      orderPreviewDownloadBtn.setAttribute("download", fileName);
+    }
+
+    const ext = (fileName.split(".").pop() || "").toLowerCase();
+
+    if (ext === "pdf") {
+      orderPreviewIframe.src = signedUrl;
+      orderPreviewIframe.classList.remove("hidden");
+      if (orderPreviewLoading) orderPreviewLoading.classList.add("hidden");
+    } else if (ext === "docx") {
+      if (typeof mammoth === "undefined") {
+        throw new Error("Biblioteka Mammoth.js nie jest załadowana.");
+      }
+      const response = await fetch(signedUrl);
+      if (!response.ok) throw new Error(`Błąd pobierania pliku (${response.status})`);
+      const arrayBuffer = await response.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+
+      orderPreviewDocxContent.innerHTML = result.value || "<p>Dokument jest pusty.</p>";
+      orderPreviewDocxContent.classList.remove("hidden");
+      if (orderPreviewLoading) orderPreviewLoading.classList.add("hidden");
+    } else {
+      orderPreviewIframe.src = signedUrl;
+      orderPreviewIframe.classList.remove("hidden");
+      if (orderPreviewLoading) orderPreviewLoading.classList.add("hidden");
+    }
+  } catch (err) {
+    console.error("Błąd podglądu zlecenia:", err);
+    if (orderPreviewLoading) {
+      orderPreviewLoading.textContent = `❌ Nie udało się wyświetlić podglądu: ${err.message}. Możesz pobrać plik przyciskiem poniżej.`;
+    }
+  }
+}
+
 async function downloadOrViewOrderFile(invoice) {
   if (!invoice || !invoice.order_file_url) return;
   showLoading("Otwieranie pliku zlecenia...");
@@ -2562,6 +2664,17 @@ if (ordersFilesInput) {
   ordersFilesInput.addEventListener("change", (e) => {
     if (e.target.files) {
       handleOrdersFilesSelected(e.target.files);
+    }
+  });
+}
+
+if (btnCloseOrderPreview) btnCloseOrderPreview.addEventListener("click", closeOrderPreviewModal);
+if (btnCloseOrderPreviewX) btnCloseOrderPreviewX.addEventListener("click", closeOrderPreviewModal);
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeOrderPreviewModal();
     }
   });
 }
