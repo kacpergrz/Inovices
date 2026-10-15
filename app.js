@@ -251,6 +251,17 @@ function formatAmount(value, currency) {
   return num.toFixed(2) + " " + (currency || "");
 }
 
+let cachedNbpRates = { PLN: 1, EUR: 4.3 };
+
+function getInvoiceExchangeRate(invoice, defaultRates = cachedNbpRates) {
+  const cur = String(invoice?.currency || "PLN").trim().toUpperCase();
+  if (cur === "PLN") return 1.0;
+  if (invoice?.exchange_rate != null && Number(invoice.exchange_rate) > 0) {
+    return Number(invoice.exchange_rate);
+  }
+  return Number(defaultRates?.[cur] || (cur === "EUR" ? 4.3 : 1.0));
+}
+
 // =========================================================================
 // WALIDACJA FORMULARZA FAKTURY
 // =========================================================================
@@ -321,11 +332,26 @@ function validateInvoiceForm(data) {
 async function fetchInvoices() {
   showLoading("Wczytywanie faktur...");
   try {
-    const { data, error } = await supabaseClient
+    getNbpRates().then(() => {
+      if (allInvoices && allInvoices.length > 0) applyFiltersAndRender();
+    }).catch(() => {});
+
+    const columnsWithRate =
+      "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month, order_number, order_file_url, order_file_name, exchange_rate";
+    const columnsBase =
+      "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month, order_number, order_file_url, order_file_name";
+
+    let { data, error } = await supabaseClient
       .from(TABLE_NAME)
-      .select(
-        "id, invoice_number, ksef_number, seller_name, seller_nip, issue_date, due_date, net_amount, gross_amount, currency, paid, vehicle_id, allocation_type, service_month, order_number, order_file_url, order_file_name"
-      );
+      .select(columnsWithRate);
+
+    if (error && (error.code === "42703" || error.message?.includes("exchange_rate"))) {
+      const fallback = await supabaseClient
+        .from(TABLE_NAME)
+        .select(columnsBase);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
 
@@ -387,7 +413,13 @@ function applyFiltersAndRender() {
 async function addInvoice(invoiceData) {
   showLoading("Zapisywanie faktury...");
   try {
-    const { error } = await supabaseClient.from(TABLE_NAME).insert([invoiceData]);
+    let { error } = await supabaseClient.from(TABLE_NAME).insert([invoiceData]);
+    if (error && (error.code === "42703" || error.message?.includes("exchange_rate"))) {
+      const copy = { ...invoiceData };
+      delete copy.exchange_rate;
+      const retry = await supabaseClient.from(TABLE_NAME).insert([copy]);
+      error = retry.error;
+    }
     if (error) throw error;
     clearStatus();
     await fetchInvoices();
@@ -402,7 +434,13 @@ async function addInvoice(invoiceData) {
 async function updateInvoice(id, invoiceData) {
   showLoading("Zapisywanie zmian...");
   try {
-    const { error } = await supabaseClient.from(TABLE_NAME).update(invoiceData).eq("id", id);
+    let { error } = await supabaseClient.from(TABLE_NAME).update(invoiceData).eq("id", id);
+    if (error && (error.code === "42703" || error.message?.includes("exchange_rate"))) {
+      const copy = { ...invoiceData };
+      delete copy.exchange_rate;
+      const retry = await supabaseClient.from(TABLE_NAME).update(copy).eq("id", id);
+      error = retry.error;
+    }
     if (error) throw error;
     clearStatus();
     await fetchInvoices();
@@ -583,6 +621,15 @@ function renderTable(invoices) {
 
     const calIcon = `<svg class="cal-mini-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
 
+    const cur = String(invoice.currency || "PLN").toUpperCase();
+    const isForeign = cur !== "PLN";
+    const rate = isForeign ? getInvoiceExchangeRate(invoice, cachedNbpRates) : 1;
+    const netPln = (isForeign && invoice.net_amount != null) ? (Number(invoice.net_amount) * rate) : null;
+    const grossPln = (isForeign && invoice.gross_amount != null) ? (Number(invoice.gross_amount) * rate) : null;
+    const rateLabel = isForeign
+      ? (invoice.exchange_rate ? `kurs: ${Number(invoice.exchange_rate).toFixed(4)}` : `kurs NBP: ${rate.toFixed(4)}`)
+      : "";
+
     tr.className = "invoice-row";
     tr.innerHTML = `
       <td class="col-number" data-label="Numer faktury">
@@ -628,10 +675,12 @@ function renderTable(invoices) {
       <td class="col-net" data-label="Netto">
         <span class="amount-sublabel">Netto</span>
         <span class="net-amount-val">${formatAmount(invoice.net_amount, invoice.currency)}</span>
+        ${isForeign && netPln != null ? `<div class="currency-conversion-val" title="Przeliczono wg kursu ${rate}">~${formatAmount(netPln, "PLN")}</div>` : ""}
       </td>
       <td class="col-gross" data-label="Brutto">
         <span class="amount-sublabel">Brutto</span>
         <span class="gross-amount-val">${formatAmount(invoice.gross_amount, invoice.currency)}</span>
+        ${isForeign && grossPln != null ? `<div class="currency-conversion-val" title="Przeliczono wg kursu ${rate}">~${formatAmount(grossPln, "PLN")}<span class="currency-rate-chip" title="Kurs wymiany waluty">${rateLabel}</span></div>` : ""}
       </td>
       <td class="col-currency" data-label="Waluta">${escapeHtml(invoice.currency || "-")}</td>
       <td class="col-status" data-label="Status">${statusBadge}</td>
@@ -712,6 +761,16 @@ function openInvoiceForm(invoice) {
     fOrderNumber.value = invoice ? invoice.order_number || "" : "";
   }
 
+  const fExchangeRate = document.getElementById("f-exchange-rate");
+  const fExchangeRateRow = document.getElementById("f-exchange-rate-row");
+  if (fExchangeRate) {
+    fExchangeRate.value = invoice?.exchange_rate != null ? String(invoice.exchange_rate) : "";
+  }
+  if (fExchangeRateRow) {
+    const cur = invoice ? invoice.currency || "PLN" : "PLN";
+    fExchangeRateRow.style.display = cur !== "PLN" ? "block" : "none";
+  }
+
   updateNbpPreview();
   invoiceFormModal.classList.remove("hidden");
 }
@@ -734,6 +793,13 @@ invoiceForm.addEventListener("submit", (e) => {
     ? document.getElementById("f-order-number").value.trim()
     : "";
 
+  const exchangeRateRaw = document.getElementById("f-exchange-rate")
+    ? document.getElementById("f-exchange-rate").value.trim()
+    : "";
+  const exchangeRateVal = exchangeRateRaw && !isNaN(Number(exchangeRateRaw)) && Number(exchangeRateRaw) > 0
+    ? Number(exchangeRateRaw)
+    : null;
+
   const formData = {
     invoice_number: document.getElementById("f-invoice-number").value,
     ksef_number: document.getElementById("f-ksef-number").value || null,
@@ -746,7 +812,8 @@ invoiceForm.addEventListener("submit", (e) => {
     gross_amount: document.getElementById("f-gross-amount").value,
     currency: document.getElementById("f-currency").value,
     paid: document.getElementById("f-paid").value === "true",
-    service_month: serviceMonthRaw || null
+    service_month: serviceMonthRaw || null,
+    exchange_rate: exchangeRateVal
   };
 
   if (!validateInvoiceForm(formData)) return;
@@ -773,6 +840,7 @@ invoiceForm.addEventListener("submit", (e) => {
     net_amount: Number(formData.net_amount),
     gross_amount: Number(formData.gross_amount),
     currency: formData.currency,
+    exchange_rate: formData.exchange_rate,
     paid: formData.paid,
     vehicle_id: vehicleId,
     allocation_type: allocationType,
@@ -798,31 +866,46 @@ invoiceForm.addEventListener("submit", (e) => {
 });
 
 async function updateNbpPreview() {
-  const currency = document.getElementById("f-currency").value;
-  const grossAmount = parseFloat(document.getElementById("f-gross-amount").value);
+  const curSelect = document.getElementById("f-currency");
+  const currency = curSelect ? curSelect.value : "PLN";
+  const grossAmount = parseFloat(document.getElementById("f-gross-amount")?.value || "0");
   const previewRow = document.getElementById("nbp-preview-row");
   const previewText = document.getElementById("nbp-preview-text");
+  const fExchangeRate = document.getElementById("f-exchange-rate");
+  const fExchangeRateRow = document.getElementById("f-exchange-rate-row");
+
+  if (fExchangeRateRow) {
+    fExchangeRateRow.style.display = currency !== "PLN" ? "block" : "none";
+  }
 
   if (currency === "PLN" || !grossAmount || Number.isNaN(grossAmount)) {
-    previewRow.style.display = "none";
+    if (previewRow) previewRow.style.display = "none";
     return;
   }
 
   try {
-    const response = await fetch(`https://api.nbp.pl/api/exchangerates/rates/A/${currency}/?format=json`);
-    if (!response.ok) throw new Error("NBP API error");
-    const data = await response.json();
-    const rate = data.rates[0].mid;
+    let rate = (fExchangeRate && Number(fExchangeRate.value) > 0) ? Number(fExchangeRate.value) : null;
+    if (!rate) {
+      const response = await fetch(`https://api.nbp.pl/api/exchangerates/rates/A/${currency}/?format=json`);
+      if (!response.ok) throw new Error("NBP API error");
+      const data = await response.json();
+      rate = Number(data.rates[0].mid);
+      if (fExchangeRate && !fExchangeRate.value) {
+        fExchangeRate.value = String(rate);
+      }
+    }
     const converted = (grossAmount * rate).toFixed(2);
-    previewText.textContent = `Podgląd wg kursu NBP (${rate}): ~${converted} PLN`;
-    previewRow.style.display = "block";
+    if (previewText) previewText.textContent = `Podgląd wg kursu (${rate}): ~${converted} PLN`;
+    if (previewRow) previewRow.style.display = "block";
   } catch (err) {
-    previewRow.style.display = "none";
+    if (previewRow) previewRow.style.display = "none";
   }
 }
 
 document.getElementById("f-currency").addEventListener("change", updateNbpPreview);
 document.getElementById("f-gross-amount").addEventListener("input", updateNbpPreview);
+const fExchangeRateEl = document.getElementById("f-exchange-rate");
+if (fExchangeRateEl) fExchangeRateEl.addEventListener("input", updateNbpPreview);
 
 // =========================================================================
 // MODAL POTWIERDZENIA (uniwersalny)
@@ -1124,6 +1207,7 @@ async function getNbpRates() {
   } catch (err) {
     rates.EUR = 4.3;
   }
+  cachedNbpRates = { ...cachedNbpRates, ...rates };
   return rates;
 }
 
@@ -1345,18 +1429,25 @@ async function fetchCompanyResult(month) {
   try {
     const rates = await getNbpRates();
 
-    const { data: invoices, error: invError } = await supabaseClient
+    let invRes = await supabaseClient
       .from("invoices")
-      .select("net_amount, currency, issue_date, service_month")
+      .select("net_amount, currency, issue_date, service_month, exchange_rate")
       .or(getMonthInvoiceFilter(month));
-    if (invError) throw invError;
+    if (invRes.error && (invRes.error.code === "42703" || invRes.error.message?.includes("exchange_rate"))) {
+      invRes = await supabaseClient
+        .from("invoices")
+        .select("net_amount, currency, issue_date, service_month")
+        .or(getMonthInvoiceFilter(month));
+    }
+    if (invRes.error) throw invRes.error;
+    const invoices = invRes.data || [];
 
     let totalRevenue = 0;
     let usedForeign = false;
     (invoices || []).forEach((inv) => {
       const net = Number(inv.net_amount || 0);
       const cur = String(inv.currency || "PLN").toUpperCase();
-      const rate = Number(rates[cur] || 1);
+      const rate = (inv.exchange_rate && Number(inv.exchange_rate) > 0) ? Number(inv.exchange_rate) : Number(rates[cur] || 1);
       if (cur !== "PLN") usedForeign = true;
       totalRevenue += net * rate;
     });
@@ -1435,11 +1526,18 @@ async function fetchCompanySummary(month) {
   try {
     const rates = await getNbpRates();
 
-    const { data: invoices, error } = await supabaseClient
+    let invRes = await supabaseClient
       .from("invoices")
-      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
+      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month, exchange_rate")
       .or(getMonthInvoiceFilter(month));
-    if (error) throw error;
+    if (invRes.error && (invRes.error.code === "42703" || invRes.error.message?.includes("exchange_rate"))) {
+      invRes = await supabaseClient
+        .from("invoices")
+        .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
+        .or(getMonthInvoiceFilter(month));
+    }
+    if (invRes.error) throw invRes.error;
+    const invoices = invRes.data || [];
 
     let totalGross = 0;
     let totalNet = 0;
@@ -1449,7 +1547,7 @@ async function fetchCompanySummary(month) {
 
     (invoices || []).forEach((inv) => {
       const cur = String(inv.currency || "PLN").toUpperCase();
-      const rate = Number(rates[cur] || 1);
+      const rate = (inv.exchange_rate && Number(inv.exchange_rate) > 0) ? Number(inv.exchange_rate) : Number(rates[cur] || 1);
       const gross = Number(inv.gross_amount || 0) * rate;
       const net = Number(inv.net_amount || 0) * rate;
       totalGross += gross;
@@ -1538,13 +1636,22 @@ async function fetchVehicleResult(vehicleId, month) {
     const { startOfMonth, endOfMonth } = getMonthRange(month);
     const rates = await getNbpRates();
 
-    const { data: invoices, error: invError } = await supabaseClient
+    let invRes = await supabaseClient
       .from("invoices")
-      .select("net_amount, currency, issue_date, service_month")
+      .select("net_amount, currency, issue_date, service_month, exchange_rate")
       .eq("vehicle_id", vehicleId)
       .eq("allocation_type", "vehicle")
       .or(getMonthInvoiceFilter(month));
-    if (invError) throw invError;
+    if (invRes.error && (invRes.error.code === "42703" || invRes.error.message?.includes("exchange_rate"))) {
+      invRes = await supabaseClient
+        .from("invoices")
+        .select("net_amount, currency, issue_date, service_month")
+        .eq("vehicle_id", vehicleId)
+        .eq("allocation_type", "vehicle")
+        .or(getMonthInvoiceFilter(month));
+    }
+    if (invRes.error) throw invRes.error;
+    const invoices = invRes.data || [];
 
     const { data: expenses, error: expError } = await supabaseClient
       .from("expenses")
@@ -1558,7 +1665,7 @@ async function fetchVehicleResult(vehicleId, month) {
     let usedForeign = false;
     (invoices || []).forEach((inv) => {
       const cur = String(inv.currency || "PLN").toUpperCase();
-      const rate = Number(rates[cur] || 1);
+      const rate = (inv.exchange_rate && Number(inv.exchange_rate) > 0) ? Number(inv.exchange_rate) : Number(rates[cur] || 1);
       revenue += Number(inv.net_amount || 0) * rate;
       if (cur !== "PLN") usedForeign = true;
     });
@@ -1732,13 +1839,22 @@ async function fetchVehicleSummary(vehicleId, month) {
     const { startOfMonth, endOfMonth } = getMonthRange(month);
     const rates = await getNbpRates();
 
-    const { data: invoices, error } = await supabaseClient
+    let invRes = await supabaseClient
       .from("invoices")
-      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
+      .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month, exchange_rate")
       .eq("vehicle_id", vehicleId)
       .eq("allocation_type", "vehicle")
       .or(getMonthInvoiceFilter(month));
-    if (error) throw error;
+    if (invRes.error && (invRes.error.code === "42703" || invRes.error.message?.includes("exchange_rate"))) {
+      invRes = await supabaseClient
+        .from("invoices")
+        .select("invoice_number, net_amount, gross_amount, currency, paid, issue_date, service_month")
+        .eq("vehicle_id", vehicleId)
+        .eq("allocation_type", "vehicle")
+        .or(getMonthInvoiceFilter(month));
+    }
+    if (invRes.error) throw invRes.error;
+    const invoices = invRes.data || [];
 
     let netTotal = 0;
     let grossTotal = 0;
@@ -1748,7 +1864,7 @@ async function fetchVehicleSummary(vehicleId, month) {
 
     (invoices || []).forEach((inv) => {
       const cur = String(inv.currency || "PLN").toUpperCase();
-      const rate = Number(rates[cur] || 1);
+      const rate = (inv.exchange_rate && Number(inv.exchange_rate) > 0) ? Number(inv.exchange_rate) : Number(rates[cur] || 1);
       const net = Number(inv.net_amount || 0) * rate;
       const gross = Number(inv.gross_amount || 0) * rate;
       netTotal += net;
@@ -1835,13 +1951,22 @@ async function fetchComparison(month) {
 
     const vehicleIds = vehicles.map((v) => v.id);
 
-    const { data: invoices, error: invError } = await supabaseClient
+    let invRes = await supabaseClient
       .from("invoices")
-      .select("vehicle_id, net_amount, currency, issue_date, service_month")
+      .select("vehicle_id, net_amount, currency, issue_date, service_month, exchange_rate")
       .in("vehicle_id", vehicleIds)
       .eq("allocation_type", "vehicle")
       .or(getMonthInvoiceFilter(month));
-    if (invError) throw invError;
+    if (invRes.error && (invRes.error.code === "42703" || invRes.error.message?.includes("exchange_rate"))) {
+      invRes = await supabaseClient
+        .from("invoices")
+        .select("vehicle_id, net_amount, currency, issue_date, service_month")
+        .in("vehicle_id", vehicleIds)
+        .eq("allocation_type", "vehicle")
+        .or(getMonthInvoiceFilter(month));
+    }
+    if (invRes.error) throw invRes.error;
+    const invoices = invRes.data || [];
 
     const { data: expenses, error: expError } = await supabaseClient
       .from("expenses")
@@ -1864,7 +1989,7 @@ async function fetchComparison(month) {
     (invoices || []).forEach((inv) => {
       if (!inv.vehicle_id) return;
       const cur = String(inv.currency || "PLN").toUpperCase();
-      const rate = Number(rates[cur] || 1);
+      const rate = (inv.exchange_rate && Number(inv.exchange_rate) > 0) ? Number(inv.exchange_rate) : Number(rates[cur] || 1);
       const vId = Number(inv.vehicle_id);
       revenueByVehicle[vId] = (revenueByVehicle[vId] || 0) + Number(inv.net_amount || 0) * rate;
       countByVehicle[vId] = (countByVehicle[vId] || 0) + 1;
@@ -4132,6 +4257,7 @@ if (typeof module !== "undefined" && module.exports) {
     getMonthInvoiceFilter,
     invoiceBelongsToMonth,
     generateMonthOptions,
-    renderVehicleBadge
+    renderVehicleBadge,
+    getInvoiceExchangeRate
   };
 }

@@ -1165,6 +1165,7 @@ interface XmlInvoiceData {
   saleDate: string | null;
   dueDate: string | null;
   orderNumber: string | null;
+  exchangeRate: number | null;
 }
 
 async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<string, XmlInvoiceData>> {
@@ -1205,6 +1206,10 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
           saleDate: val?.saleDate ?? null,
           dueDate: val?.dueDate ?? null,
           orderNumber: val?.orderNumber ?? null,
+          exchangeRate: (val?.exchangeRate != null ? Number(val.exchangeRate) : null) ??
+                        (val?.kursWalutyZ != null ? Number(val.kursWalutyZ) : null) ??
+                        (val?.kurs != null ? Number(val.kurs) : null) ??
+                        null,
         };
       }
       return result;
@@ -1213,15 +1218,18 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
     const dates = (data && typeof data.dates === "object" && data.dates) ? data.dates : {};
     const dueDates = (data && typeof data.dueDates === "object" && data.dueDates) ? data.dueDates : {};
     const orderNumbers = (data && typeof data.orderNumbers === "object" && data.orderNumbers) ? data.orderNumbers : {};
+    const exchangeRates = (data && typeof data.exchangeRates === "object" && data.exchangeRates) ? data.exchangeRates : {};
 
     for (const num of ksefNumbers) {
       const saleVal = dates[num];
       const dueVal = dueDates[num];
       const orderVal = orderNumbers[num];
+      const rateVal = exchangeRates[num];
       result[num] = {
         saleDate: typeof saleVal === "string" ? saleVal : (saleVal?.saleDate ?? null),
         dueDate: typeof dueVal === "string" ? dueVal : (dueVal?.dueDate ?? null),
         orderNumber: typeof orderVal === "string" ? orderVal : (orderVal?.orderNumber ?? null),
+        exchangeRate: typeof rateVal === "number" ? rateVal : (rateVal?.exchangeRate ?? rateVal?.kursWalutyZ ?? rateVal?.kurs ?? null),
       };
     }
 
@@ -1246,6 +1254,44 @@ async function getNewInvoicesXmlDates(invoices: any[]): Promise<Record<string, X
 
   if (newKsefNumbers.length === 0) return {};
   return await fetchXmlDatesFromBroker(newKsefNumbers);
+}
+
+function getPreviousDayIso(dateStr?: string | null): string | null {
+  if (!dateStr || !isIsoDate(dateStr)) return null;
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+async function resolveInvoiceExchangeRate(inv: any, xmlInfo?: XmlInvoiceData): Promise<number | null> {
+  const cur = String(inv.currency || "PLN").trim().toUpperCase();
+  if (cur === "PLN") return 1.0;
+
+  // 1. Kurs z KSeF XML (np. pole KursWalutyZ ze schematu FA(2))
+  if (xmlInfo && xmlInfo.exchangeRate != null && Number(xmlInfo.exchangeRate) > 0) {
+    return Number(xmlInfo.exchangeRate);
+  }
+
+  // 2. Jeśli broker przekazał kurs bezpośrednio na obiekcie faktury
+  if (inv.exchange_rate != null && Number(inv.exchange_rate) > 0) {
+    return Number(inv.exchange_rate);
+  }
+
+  // 3. Kurs z NBP z ostatniego dnia roboczego poprzedzającego datę sprzedaży lub wystawienia (art. 31a ustawy o VAT)
+  const effectiveDate = (typeof xmlInfo === "object" && xmlInfo?.saleDate) || inv.sale_date || inv.issue_date || null;
+  const dayBefore = getPreviousDayIso(effectiveDate) || effectiveDate;
+  if (dayBefore) {
+    try {
+      const rates = await getRatesForDate(dayBefore);
+      if (rates && rates[cur]) {
+        return Number(rates[cur]);
+      }
+    } catch (err: any) {
+      console.warn(`[KSeF Sync] Błąd pobierania kursu NBP dla ${cur} (${dayBefore}):`, err?.message || err);
+    }
+  }
+
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -1521,65 +1567,82 @@ if (
 
         const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
 
-        const payloadToInsert = invoices.map((inv: any) => {
-          const nip = normalizeNip(inv.seller_nip);
-          const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
-          const vehicleKey = String(vehicleRule?.vehicle ?? "")
-            .trim()
-            .toLowerCase()
-            .replace(/[\s-]/g, "");
+        const payloadToInsert = await Promise.all(
+          invoices.map(async (inv: any) => {
+            const nip = normalizeNip(inv.seller_nip);
+            const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
+            const vehicleKey = String(vehicleRule?.vehicle ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/[\s-]/g, "");
 
-          const vehicle = vehicleByKey.get(vehicleKey) ?? null;
+            const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
-          const xmlInfo = xmlDatesMap[inv.ksef_number];
-          const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
-            ? xmlInfo.saleDate
-            : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
-          const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
-            ? xmlInfo.dueDate
-            : null;
-          const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
-            ? xmlInfo.orderNumber
-            : (inv.order_number || null);
+            const xmlInfo = xmlDatesMap[inv.ksef_number];
+            const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+              ? xmlInfo.saleDate
+              : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
+            const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+              ? xmlInfo.dueDate
+              : null;
+            const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
+              ? xmlInfo.orderNumber
+              : (inv.order_number || null);
 
-          const effectiveDate = saleDate || inv.issue_date || null;
-          const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+            const effectiveDate = saleDate || inv.issue_date || null;
+            const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
 
-          const invWithDueDate = {
-            ...inv,
-            due_date: ksefDueDate || inv.due_date || null,
-          };
+            const invWithDueDate = {
+              ...inv,
+              due_date: ksefDueDate || inv.due_date || null,
+            };
 
-          return {
-            ksef_number: inv.ksef_number || null,
-            num: inv.invoice_number || inv.ksef_number || null,
-            invoice_number: inv.invoice_number || null,
-            order_number: ksefOrderNumber || null,
-            issue_date: inv.issue_date || null,
-            service_month: serviceMonth,
-            due_date: inferDueDate(invWithDueDate, rules),
-            payment_days: inferPaymentDays(invWithDueDate, rules),
-            gross_amount: inv.gross_amount ?? null,
-            net_amount: inv.net_amount ?? null,
-            currency: inv.currency || "PLN",
-            seller_name: inv.seller_name || null,
-            seller_nip: inv.seller_nip || null,
-            buyer_nip: inv.buyer_nip || null,
-            source: "ksef",
-            ksef_status: "accepted",
-            paid: false,
-            vehicle_id: vehicle?.id ?? null,
-            allocation_type: vehicle ? "vehicle" : "unassigned",
-            updated_at: new Date().toISOString(),
-          };
-        });
+            const ksefExchangeRate = await resolveInvoiceExchangeRate(inv, xmlInfo);
 
-        const { error: upsertErr } = await supabase
+            return {
+              ksef_number: inv.ksef_number || null,
+              num: inv.invoice_number || inv.ksef_number || null,
+              invoice_number: inv.invoice_number || null,
+              order_number: ksefOrderNumber || null,
+              issue_date: inv.issue_date || null,
+              service_month: serviceMonth,
+              due_date: inferDueDate(invWithDueDate, rules),
+              payment_days: inferPaymentDays(invWithDueDate, rules),
+              gross_amount: inv.gross_amount ?? null,
+              net_amount: inv.net_amount ?? null,
+              currency: inv.currency || "PLN",
+              exchange_rate: ksefExchangeRate,
+              seller_name: inv.seller_name || null,
+              seller_nip: inv.seller_nip || null,
+              buyer_nip: inv.buyer_nip || null,
+              source: "ksef",
+              ksef_status: "accepted",
+              paid: false,
+              vehicle_id: vehicle?.id ?? null,
+              allocation_type: vehicle ? "vehicle" : "unassigned",
+              updated_at: new Date().toISOString(),
+            };
+          })
+        );
+
+        let { error: upsertErr } = await supabase
           .from("invoices")
           .upsert(payloadToInsert, {
             onConflict: "ksef_number",
             ignoreDuplicates: true,
           });
+
+        if (upsertErr && (upsertErr.message?.includes("exchange_rate") || (upsertErr as any).code === "42703")) {
+          console.warn("[KSeF Sync] Kolumna exchange_rate nie istnieje w bazie - ponawiam zapis bez kolumny.");
+          const safePayload = payloadToInsert.map(({ exchange_rate, ...rest }: any) => rest);
+          const retryResult = await supabase
+            .from("invoices")
+            .upsert(safePayload, {
+              onConflict: "ksef_number",
+              ignoreDuplicates: true,
+            });
+          upsertErr = retryResult.error;
+        }
 
         if (upsertErr) throw upsertErr;
 
@@ -2292,62 +2355,76 @@ for (const vehicle of activeVehicles ?? []) {
 
 const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
 
-const payloadToInsert = invoices.map((inv: any) => {
-  const nip = normalizeNip(inv.seller_nip);
-  const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
-  const vehicleKey = String(vehicleRule?.vehicle ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]/g, "");
+const payloadToInsert = await Promise.all(
+  invoices.map(async (inv: any) => {
+    const nip = normalizeNip(inv.seller_nip);
+    const vehicleRule = rules.get("vehicle_by_nip")?.get(nip);
+    const vehicleKey = String(vehicleRule?.vehicle ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]/g, "");
 
-  const vehicle = vehicleByKey.get(vehicleKey) ?? null;
+    const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
-  const xmlInfo = xmlDatesMap[inv.ksef_number];
-  const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
-    ? xmlInfo.saleDate
-    : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
-  const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
-    ? xmlInfo.dueDate
-    : null;
-  const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
-    ? xmlInfo.orderNumber
-    : (inv.order_number || null);
+    const xmlInfo = xmlDatesMap[inv.ksef_number];
+    const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+      ? xmlInfo.saleDate
+      : (typeof xmlInfo === "string" ? xmlInfo : (inv.sale_date || null));
+    const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
+      ? xmlInfo.dueDate
+      : null;
+    const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
+      ? xmlInfo.orderNumber
+      : (inv.order_number || null);
 
-  const effectiveDate = saleDate || inv.issue_date || null;
-  const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
+    const effectiveDate = saleDate || inv.issue_date || null;
+    const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
 
-  const invWithDueDate = {
-    ...inv,
-    due_date: ksefDueDate || inv.due_date || null,
-  };
+    const invWithDueDate = {
+      ...inv,
+      due_date: ksefDueDate || inv.due_date || null,
+    };
 
-  return {
-    ksef_number: inv.ksef_number || null,
-    num: inv.invoice_number || inv.ksef_number || null,
-    invoice_number: inv.invoice_number || null,
-    order_number: ksefOrderNumber || null,
-    issue_date: inv.issue_date || null,
-    service_month: serviceMonth,
-    due_date: inferDueDate(invWithDueDate, rules),
-    payment_days: inferPaymentDays(invWithDueDate, rules),
-    gross_amount: inv.gross_amount ?? null,
-    net_amount: inv.net_amount ?? null,
-    currency: inv.currency || "PLN",
-    seller_name: inv.seller_name || null,
-    seller_nip: inv.seller_nip || null,
-    buyer_nip: inv.buyer_nip || null,
-    source: "ksef",
-    ksef_status: "accepted",
-    paid: false,
-    vehicle_id: vehicle?.id ?? null,
-    allocation_type: vehicle ? "vehicle" : "unassigned",
-    updated_at: new Date().toISOString(),
-  };
-});
-        const { error } = await supabase
+    const ksefExchangeRate = await resolveInvoiceExchangeRate(inv, xmlInfo);
+
+    return {
+      ksef_number: inv.ksef_number || null,
+      num: inv.invoice_number || inv.ksef_number || null,
+      invoice_number: inv.invoice_number || null,
+      order_number: ksefOrderNumber || null,
+      issue_date: inv.issue_date || null,
+      service_month: serviceMonth,
+      due_date: inferDueDate(invWithDueDate, rules),
+      payment_days: inferPaymentDays(invWithDueDate, rules),
+      gross_amount: inv.gross_amount ?? null,
+      net_amount: inv.net_amount ?? null,
+      currency: inv.currency || "PLN",
+      exchange_rate: ksefExchangeRate,
+      seller_name: inv.seller_name || null,
+      seller_nip: inv.seller_nip || null,
+      buyer_nip: inv.buyer_nip || null,
+      source: "ksef",
+      ksef_status: "accepted",
+      paid: false,
+      vehicle_id: vehicle?.id ?? null,
+      allocation_type: vehicle ? "vehicle" : "unassigned",
+      updated_at: new Date().toISOString(),
+    };
+  })
+);
+
+        let { error } = await supabase
           .from("invoices")
-          .upsert(payloadToInsert, { onConflict: "ksef_number",
-          ignoreDuplicates: true });
+          .upsert(payloadToInsert, { onConflict: "ksef_number", ignoreDuplicates: true });
+
+        if (error && (error.message?.includes("exchange_rate") || (error as any).code === "42703")) {
+          console.warn("[KSeF Sync WhatsApp] Kolumna exchange_rate nie istnieje w bazie - ponawiam zapis bez kolumny.");
+          const safePayload = payloadToInsert.map(({ exchange_rate, ...rest }: any) => rest);
+          const retry = await supabase
+            .from("invoices")
+            .upsert(safePayload, { onConflict: "ksef_number", ignoreDuplicates: true });
+          error = retry.error;
+        }
 
         if (error) throw new Error(error.message);
 

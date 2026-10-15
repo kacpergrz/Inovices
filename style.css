@@ -609,6 +609,27 @@ body {
   margin-top: 8px;
 }
 
+.currency-conversion-val {
+  font-size: 0.78rem;
+  color: #0369a1;
+  font-weight: 500;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.currency-rate-chip {
+  font-size: 0.7rem;
+  background: #e0f2fe;
+  color: #0284c7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid #bae6fd;
+}
+
 .empty-note {
   color: var(--color-text-muted);
   font-size: 0.9rem;

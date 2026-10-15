@@ -588,6 +588,12 @@
           </select>
         </div>
 
+        <div class="form-row" id="f-exchange-rate-row" style="display:none;">
+          <label for="f-exchange-rate">Kurs wymiany na PLN (z KSeF / NBP)</label>
+          <input type="number" id="f-exchange-rate" step="0.0001" min="0" placeholder="np. 4.2851">
+          <span class="rules-hint" style="font-size:0.75rem;margin:2px 0 0;">Kurs przeliczenia waluty na PLN (pobrany z KSeF lub tabeli NBP).</span>
+        </div>
+
         <div class="form-row" id="nbp-preview-row" style="display:none;">
           <span class="nbp-preview" id="nbp-preview-text"></span>
         </div>
