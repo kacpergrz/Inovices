@@ -18,19 +18,22 @@ assert(html.includes('id="orders-drop-zone"'), "index.html musi zawierać stref�
 assert(html.includes('id="orders-preview-table"'), "index.html musi zawierać tabelę podglądu odczytanych zleceń");
 assert(html.includes('id="btn-save-orders-batch"'), "index.html musi zawierać przycisk zapisu zleceń");
 assert(html.includes('id="order-preview-modal"'), "index.html musi zawierać modal order-preview-modal");
+assert(html.includes('id="order-preview-pdf-pages"'), "index.html musi zawierać kontener dla podglądu stron PDF na canvas");
 assert(html.includes('id="order-preview-iframe"'), "index.html musi zawierać iframe dla podglądu PDF");
 assert(html.includes('id="order-preview-docx-content"'), "index.html musi zawierać kontener dla podglądu DOCX");
-console.log("✓ Test 1: Struktura index.html poprawna (biblioteki CDN, toolbar, tabela, modal z Drag & Drop i podgląd dokumentów)");
+console.log("✓ Test 1: Struktura index.html poprawna (biblioteki CDN, toolbar, tabela, modal z Drag & Drop i podgląd dokumentów na Canvas)");
 
 // 2. Weryfikacja style.css
 assert(css.includes(".drop-zone"), "style.css musi stylizować strefę upuszczania plików");
 assert(css.includes(".badge-order"), "style.css musi stylizować badge zlecenia");
 assert(css.includes(".modal-box-large"), "style.css musi definiować powiększone okno modalne");
 assert(css.includes(".modal-box-preview"), "style.css musi definiować okno podglądu dokumentu");
+assert(css.includes(".order-preview-pdf-pages"), "style.css musi definiować styl kontenera stron PDF");
+assert(css.includes(".pdf-page-canvas"), "style.css musi definiować styl elementu canvas dla stron PDF");
 assert(css.includes(".order-preview-frame"), "style.css musi definiować styl ramki podglądu PDF");
 assert(css.includes(".order-preview-docx-paper"), "style.css musi definiować kartkę A4 dla podglądu DOCX");
 assert(css.includes("#invoices-table .col-order"), "style.css musi uwzględniać kolumnę zlecenia w siatce RWD");
-console.log("✓ Test 2: Style CSS obecne i zintegrowane z RWD i podglądem");
+console.log("✓ Test 2: Style CSS obecne i zintegrowane z RWD i podglądem na Canvas");
 
 // 3. Weryfikacja logiki w app.js
 assert(js.includes("extractTextFromPdf"), "app.js musi zawierać funkcję odczytu PDF");
@@ -40,6 +43,7 @@ assert(js.includes("findMatchingInvoiceForOrder"), "app.js musi zawierać silnik
 assert(js.includes('storage\n      .from("orders")') || js.includes('.storage.from("orders")') || js.includes('from("orders")'), "app.js musi obsługiwać bucket orders w Supabase Storage");
 assert(js.includes("order_number, order_file_url, order_file_name"), "fetchInvoices musi pobierać dane powiązanego zlecenia");
 assert(js.includes("renderOrderCell"), "app.js musi renderować komórkę zlecenia w tabeli faktur");
+assert(js.includes("renderPdfPreview"), "app.js musi zawierać funkcję renderPdfPreview renderującą PDF na Canvas za pomocą PDF.js");
 assert(js.includes("previewOrderFile"), "app.js musi zawierać funkcję podglądu zlecenia bez pobierania");
 assert(js.includes("closeOrderPreviewModal"), "app.js musi zawierać funkcję zamykania modala podglądu");
 assert(js.includes('data-action="preview-order"'), "app.js musi renderować przycisk akcji preview-order");
