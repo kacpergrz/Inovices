@@ -1161,6 +1161,58 @@ async function fetchInvoicesFromBroker(params: { daysBack?: number; from?: strin
   return Array.isArray(data?.invoices) ? data.invoices : [];
 }
 
+function decodeXmlEntities(str: string): string {
+  if (!str || typeof str !== "string") return "";
+  return str
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
+}
+
+function cleanOrderNumber(raw: string): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const cleaned = decodeXmlEntities(raw)
+    .replace(/^["'„”«»#\(\)\[\]\:\s\.\,\;\\/\-]+|["'„”«»#\(\)\[\]\:\s\.\,\;\\/\-]+$/g, "")
+    .trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function parseOrderNumberFromText(rawText: string): string | null {
+  if (!rawText || typeof rawText !== "string") return null;
+  const text = decodeXmlEntities(rawText);
+
+  const patterns = [
+    /\b(?:zlecen(?:ie|ia)?\s+transportow(?:e|ego|ym)?|zlec\.?\s*transp\.?)\s*(?:nr|numer|ref|id|:|\#)?[\s:\.\/\-#\(\)\[\]"'\u201e\u201d]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:zlecen(?:ie|ia)?|zlec\.)\s*(?:nr|numer|ref|id|:|\#)[\s:\.\/\-#\(\)\[\]"'\u201e\u201d]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:nr|numer)\s*zlecenia(?:\s+transportowego)?[\s:\.\/\-#\(\)\[\]"'\u201e\u201d]*([A-Za-z0-9\/\-_\.]+)/i,
+    /\bzlecenie[\s:\-]+([A-Za-z0-9\/\-_\.]+)/i,
+    /\b(?:order|po)\s*(?:no|nr|number|ref)?[\s:\.\/\-#]+([A-Za-z0-9\/\-_\.]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const candidate = cleanOrderNumber(match[1]);
+      if (candidate && candidate.length > 1) return candidate;
+    }
+  }
+
+  return null;
+}
+
+function parseRateNumber(val: any): number | null {
+  if (val == null) return null;
+  if (typeof val === "number") return Number.isFinite(val) && val > 0 ? val : null;
+  if (typeof val === "string") {
+    const cleaned = val.trim().replace(",", ".");
+    const num = Number(cleaned);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+  return null;
+}
+
 interface XmlInvoiceData {
   saleDate: string | null;
   dueDate: string | null;
@@ -1202,15 +1254,33 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
 
     if (data && typeof data.invoicesData === "object" && data.invoicesData) {
       for (const [key, val] of Object.entries(data.invoicesData as Record<string, any>)) {
+        const rawOrder = val?.orderNumber ?? val?.order_number ?? val?.order ?? null;
+        const parsedOrder = rawOrder ? (parseOrderNumberFromText(String(rawOrder)) || cleanOrderNumber(String(rawOrder))) : null;
+        const notesText = val?.notes || val?.uwagi || val?.comments || val?.description || val?.dodatkowyOpis || val?.xml || val?.rawXml || "";
+        const extractedOrderFromNotes = notesText ? parseOrderNumberFromText(String(notesText)) : null;
+
+        const parsedRate = parseRateNumber(
+          val?.exchangeRate ??
+          val?.exchange_rate ??
+          val?.kursWalutyZ ??
+          val?.kurs_waluty_z ??
+          val?.kursWaluty ??
+          val?.kurs_waluty ??
+          val?.kurs ??
+          val?.rate
+        );
+
+        const resolvedOrder = parsedOrder || extractedOrderFromNotes;
+
         result[key] = {
           saleDate: val?.saleDate ?? null,
           dueDate: val?.dueDate ?? null,
           orderNumber: val?.orderNumber ?? null,
-          exchangeRate: (val?.exchangeRate != null ? Number(val.exchangeRate) : null) ??
-                        (val?.kursWalutyZ != null ? Number(val.kursWalutyZ) : null) ??
-                        (val?.kurs != null ? Number(val.kurs) : null) ??
-                        null,
+          exchangeRate: parsedRate,
         };
+        if (resolvedOrder) {
+          result[key].orderNumber = resolvedOrder;
+        }
       }
       return result;
     }
@@ -1225,11 +1295,14 @@ async function fetchXmlDatesFromBroker(ksefNumbers: string[]): Promise<Record<st
       const dueVal = dueDates[num];
       const orderVal = orderNumbers[num];
       const rateVal = exchangeRates[num];
+
+      const parsedOrder = orderVal ? (parseOrderNumberFromText(String(orderVal)) || cleanOrderNumber(String(orderVal))) : null;
+
       result[num] = {
         saleDate: typeof saleVal === "string" ? saleVal : (saleVal?.saleDate ?? null),
         dueDate: typeof dueVal === "string" ? dueVal : (dueVal?.dueDate ?? null),
-        orderNumber: typeof orderVal === "string" ? orderVal : (orderVal?.orderNumber ?? null),
-        exchangeRate: typeof rateVal === "number" ? rateVal : (rateVal?.exchangeRate ?? rateVal?.kursWalutyZ ?? rateVal?.kurs ?? null),
+        orderNumber: parsedOrder || (orderVal ? String(orderVal) : null),
+        exchangeRate: parseRateNumber(rateVal),
       };
     }
 
@@ -1246,12 +1319,22 @@ async function getNewInvoicesXmlDates(invoices: any[]): Promise<Record<string, X
 
   const { data: existingInvoices } = await supabase
     .from("invoices")
-    .select("ksef_number")
+    .select("ksef_number, service_month, order_number, exchange_rate, currency")
     .in("ksef_number", ksefNumbersToCheck);
 
-  const existingSet = new Set((existingInvoices || []).map((e: any) => e.ksef_number));
-  const newKsefNumbers = ksefNumbersToCheck.filter((num: string) => !existingSet.has(num));
+  // Pomijamy tylko faktury, które już mają w bazie pełen komplet danych z XML
+  const completeSet = new Set(
+    (existingInvoices || [])
+      .filter((inv: any) => {
+        const hasOrder = Boolean(inv.order_number);
+        const isPln = !inv.currency || inv.currency === "PLN";
+        const hasRate = isPln || (inv.exchange_rate != null && Number(inv.exchange_rate) > 0);
+        return Boolean(inv.service_month) && hasOrder && hasRate;
+      })
+      .map((e: any) => e.ksef_number)
+  );
 
+  const newKsefNumbers = ksefNumbersToCheck.filter((num: string) => !completeSet.has(num));
   if (newKsefNumbers.length === 0) return {};
   return await fetchXmlDatesFromBroker(newKsefNumbers);
 }
@@ -1267,17 +1350,32 @@ async function resolveInvoiceExchangeRate(inv: any, xmlInfo?: XmlInvoiceData): P
   const cur = String(inv.currency || "PLN").trim().toUpperCase();
   if (cur === "PLN") return 1.0;
 
-  // 1. Kurs z KSeF XML (np. pole KursWalutyZ ze schematu FA(2))
+  // 1. Kurs z KSeF XML zwrócony przez brokera (np. pole KursWalutyZ ze schematu FA(2))
   if (xmlInfo && xmlInfo.exchangeRate != null && Number(xmlInfo.exchangeRate) > 0) {
     return Number(xmlInfo.exchangeRate);
   }
 
-  // 2. Jeśli broker przekazał kurs bezpośrednio na obiekcie faktury
-  if (inv.exchange_rate != null && Number(inv.exchange_rate) > 0) {
-    return Number(inv.exchange_rate);
+  // 2. Jeśli broker przekazał kurs bezpośrednio na obiekcie faktury inv
+  const invRate = parseRateNumber(
+    inv.exchange_rate ??
+    inv.exchangeRate ??
+    inv.kursWalutyZ ??
+    inv.kurs ??
+    inv.rate
+  );
+  if (invRate != null && invRate > 0) {
+    return invRate;
   }
 
-  // 3. Kurs z NBP z ostatniego dnia roboczego poprzedzającego datę sprzedaży lub wystawienia (art. 31a ustawy o VAT)
+  // 3. Sprawdzenie czy w uwagach / opisie faktury nie ma wpisanego kursu (np. "kurs: 4.2851" lub "kurs EUR 4,2851")
+  const notesText = String(inv.notes || inv.uwagi || inv.description || inv.comments || "");
+  const matchRateInNotes = notesText.match(/\bkurs(?:[\s_]+(?:nbp|waluty|eur|zastosowany))?[\s:\.\-]*([0-9]+[,\.][0-9]{2,6})\b/i);
+  if (matchRateInNotes && matchRateInNotes[1]) {
+    const fromNotes = parseRateNumber(matchRateInNotes[1]);
+    if (fromNotes) return fromNotes;
+  }
+
+  // 4. Ostateczny fallback: Kurs z NBP z ostatniego dnia roboczego poprzedzającego datę sprzedaży lub wystawienia (art. 31a ustawy o VAT)
   const effectiveDate = (typeof xmlInfo === "object" && xmlInfo?.saleDate) || inv.sale_date || inv.issue_date || null;
   const dayBefore = getPreviousDayIso(effectiveDate) || effectiveDate;
   if (dayBefore) {
@@ -1567,6 +1665,13 @@ if (
 
         const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
 
+        // Pobieramy istniejące faktury z bazy, aby zachować stan opłacenia, pojazd oraz pliki
+        const { data: existingInvoices } = await supabase
+          .from("invoices")
+          .select("ksef_number, paid, vehicle_id, allocation_type, order_number, exchange_rate, order_file_url, order_file_name")
+          .in("ksef_number", invoices.map((i: any) => i.ksef_number).filter(Boolean));
+        const existingMap = new Map((existingInvoices || []).map((e: any) => [e.ksef_number, e]));
+
         const payloadToInsert = await Promise.all(
           invoices.map(async (inv: any) => {
             const nip = normalizeNip(inv.seller_nip);
@@ -1578,6 +1683,7 @@ if (
 
             const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
+            const existing = existingMap.get(inv.ksef_number);
             const xmlInfo = xmlDatesMap[inv.ksef_number];
             const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
               ? xmlInfo.saleDate
@@ -1585,9 +1691,14 @@ if (
             const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
               ? xmlInfo.dueDate
               : null;
-            const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
-              ? xmlInfo.orderNumber
-              : (inv.order_number || null);
+
+            const rawOrderFromXml = (typeof xmlInfo === "object" && xmlInfo !== null) ? xmlInfo.orderNumber : null;
+            const parsedOrderFromInv = parseOrderNumberFromText(String(inv.order_number || inv.notes || inv.uwagi || inv.description || inv.comments || ""));
+            const ksefOrderNumber = (rawOrderFromXml ? (parseOrderNumberFromText(String(rawOrderFromXml)) || cleanOrderNumber(String(rawOrderFromXml))) : null) ||
+                                    parsedOrderFromInv ||
+                                    cleanOrderNumber(String(inv.order_number || "")) ||
+                                    existing?.order_number ||
+                                    null;
 
             const effectiveDate = saleDate || inv.issue_date || null;
             const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
@@ -1611,15 +1722,17 @@ if (
               gross_amount: inv.gross_amount ?? null,
               net_amount: inv.net_amount ?? null,
               currency: inv.currency || "PLN",
-              exchange_rate: ksefExchangeRate,
+              exchange_rate: ksefExchangeRate ?? existing?.exchange_rate ?? null,
               seller_name: inv.seller_name || null,
               seller_nip: inv.seller_nip || null,
               buyer_nip: inv.buyer_nip || null,
               source: "ksef",
               ksef_status: "accepted",
-              paid: false,
-              vehicle_id: vehicle?.id ?? null,
-              allocation_type: vehicle ? "vehicle" : "unassigned",
+              paid: existing?.paid ?? false,
+              vehicle_id: existing?.vehicle_id ?? vehicle?.id ?? null,
+              allocation_type: existing?.allocation_type ?? (vehicle ? "vehicle" : "unassigned"),
+              order_file_url: existing?.order_file_url ?? null,
+              order_file_name: existing?.order_file_name ?? null,
               updated_at: new Date().toISOString(),
             };
           })
@@ -1645,6 +1758,30 @@ if (
         }
 
         if (upsertErr) throw upsertErr;
+
+        // Uzupełnienie brakującego numeru zlecenia i kursu walut dla istniejących faktur
+        const enrichmentPromises = payloadToInsert.map(async (item: any) => {
+          if (!item.ksef_number) return;
+          const updates: Record<string, any> = {};
+          if (item.order_number) updates.order_number = item.order_number;
+          if (item.exchange_rate) updates.exchange_rate = item.exchange_rate;
+          if (item.service_month) updates.service_month = item.service_month;
+          if (item.due_date) updates.due_date = item.due_date;
+          if (item.payment_days != null) updates.payment_days = item.payment_days;
+          if (Object.keys(updates).length > 0) {
+            let { error: updErr } = await supabase
+              .from("invoices")
+              .update(updates)
+              .eq("ksef_number", item.ksef_number);
+            if (updErr && (updErr.message?.includes("exchange_rate") || (updErr as any).code === "42703")) {
+              delete updates.exchange_rate;
+              if (Object.keys(updates).length > 0) {
+                await supabase.from("invoices").update(updates).eq("ksef_number", item.ksef_number);
+              }
+            }
+          }
+        });
+        await Promise.allSettled(enrichmentPromises);
 
         return new Response(JSON.stringify({ ok: true, count: invoices.length, message: "Pobrano i zapisano " + invoices.length + " faktur z KSeF." }), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
@@ -2355,6 +2492,12 @@ for (const vehicle of activeVehicles ?? []) {
 
 const xmlDatesMap = await getNewInvoicesXmlDates(invoices);
 
+const { data: existingInvoicesWA } = await supabase
+  .from("invoices")
+  .select("ksef_number, paid, vehicle_id, allocation_type, order_number, exchange_rate, order_file_url, order_file_name")
+  .in("ksef_number", invoices.map((i: any) => i.ksef_number).filter(Boolean));
+const existingMapWA = new Map((existingInvoicesWA || []).map((e: any) => [e.ksef_number, e]));
+
 const payloadToInsert = await Promise.all(
   invoices.map(async (inv: any) => {
     const nip = normalizeNip(inv.seller_nip);
@@ -2366,6 +2509,7 @@ const payloadToInsert = await Promise.all(
 
     const vehicle = vehicleByKey.get(vehicleKey) ?? null;
 
+    const existing = existingMapWA.get(inv.ksef_number);
     const xmlInfo = xmlDatesMap[inv.ksef_number];
     const saleDate = (typeof xmlInfo === "object" && xmlInfo !== null)
       ? xmlInfo.saleDate
@@ -2373,9 +2517,14 @@ const payloadToInsert = await Promise.all(
     const ksefDueDate = (typeof xmlInfo === "object" && xmlInfo !== null)
       ? xmlInfo.dueDate
       : null;
-    const ksefOrderNumber = (typeof xmlInfo === "object" && xmlInfo !== null)
-      ? xmlInfo.orderNumber
-      : (inv.order_number || null);
+
+    const rawOrderFromXml = (typeof xmlInfo === "object" && xmlInfo !== null) ? xmlInfo.orderNumber : null;
+    const parsedOrderFromInv = parseOrderNumberFromText(String(inv.order_number || inv.notes || inv.uwagi || inv.description || inv.comments || ""));
+    const ksefOrderNumber = (rawOrderFromXml ? (parseOrderNumberFromText(String(rawOrderFromXml)) || cleanOrderNumber(String(rawOrderFromXml))) : null) ||
+                            parsedOrderFromInv ||
+                            cleanOrderNumber(String(inv.order_number || "")) ||
+                            existing?.order_number ||
+                            null;
 
     const effectiveDate = saleDate || inv.issue_date || null;
     const serviceMonth = effectiveDate ? effectiveDate.slice(0, 7) : null;
@@ -2399,15 +2548,17 @@ const payloadToInsert = await Promise.all(
       gross_amount: inv.gross_amount ?? null,
       net_amount: inv.net_amount ?? null,
       currency: inv.currency || "PLN",
-      exchange_rate: ksefExchangeRate,
+      exchange_rate: ksefExchangeRate ?? existing?.exchange_rate ?? null,
       seller_name: inv.seller_name || null,
       seller_nip: inv.seller_nip || null,
       buyer_nip: inv.buyer_nip || null,
       source: "ksef",
       ksef_status: "accepted",
-      paid: false,
-      vehicle_id: vehicle?.id ?? null,
-      allocation_type: vehicle ? "vehicle" : "unassigned",
+      paid: existing?.paid ?? false,
+      vehicle_id: existing?.vehicle_id ?? vehicle?.id ?? null,
+      allocation_type: existing?.allocation_type ?? (vehicle ? "vehicle" : "unassigned"),
+      order_file_url: existing?.order_file_url ?? null,
+      order_file_name: existing?.order_file_name ?? null,
       updated_at: new Date().toISOString(),
     };
   })
@@ -2427,6 +2578,30 @@ const payloadToInsert = await Promise.all(
         }
 
         if (error) throw new Error(error.message);
+
+        // Uzupełnienie brakującego numeru zlecenia i kursu walut dla istniejących faktur
+        const enrichmentPromisesWA = payloadToInsert.map(async (item: any) => {
+          if (!item.ksef_number) return;
+          const updates: Record<string, any> = {};
+          if (item.order_number) updates.order_number = item.order_number;
+          if (item.exchange_rate) updates.exchange_rate = item.exchange_rate;
+          if (item.service_month) updates.service_month = item.service_month;
+          if (item.due_date) updates.due_date = item.due_date;
+          if (item.payment_days != null) updates.payment_days = item.payment_days;
+          if (Object.keys(updates).length > 0) {
+            let { error: updErr } = await supabase
+              .from("invoices")
+              .update(updates)
+              .eq("ksef_number", item.ksef_number);
+            if (updErr && (updErr.message?.includes("exchange_rate") || (updErr as any).code === "42703")) {
+              delete updates.exchange_rate;
+              if (Object.keys(updates).length > 0) {
+                await supabase.from("invoices").update(updates).eq("ksef_number", item.ksef_number);
+              }
+            }
+          }
+        });
+        await Promise.allSettled(enrichmentPromisesWA);
 
         await sendWhatsAppMessage(
           from,

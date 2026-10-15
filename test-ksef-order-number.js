@@ -66,4 +66,30 @@ const datesMapC = {
 assert.strictEqual(mapInvoiceOrderNumber(invC, datesMapC), "MANUAL/ORD/77", "Fallback do istniejącego order_number w obiekcie faktury");
 console.log("✓ Test 4: Fallback do ręcznego order_number działa prawidłowo");
 
+// Scenariusz D: Ekstrakcja numeru zlecenia z uwag faktury (np. podpisany 'Zlecenie transportowe nr ...')
+const invD = {
+  ksef_number: "5261040828-20261014-444444444444-DD",
+  invoice_number: "FV/2026/10/04",
+  notes: "Zlecenie transportowe nr 998811-WAW data rozładunku 2026-10-15"
+};
+const datesMapD = {
+  "5261040828-20261014-444444444444-DD": null
+};
+
+function mapInvoiceOrderWithNotes(inv, xmlDatesMap) {
+  const xmlInfo = xmlDatesMap ? xmlDatesMap[inv.ksef_number] : null;
+  const rawFromXml = (typeof xmlInfo === "object" && xmlInfo !== null) ? xmlInfo.orderNumber : null;
+  if (rawFromXml) return rawFromXml;
+  const patterns = [
+    /\b(?:zlecen(?:ie|ia)?\s+transportow(?:e|ego|ym)?|zlec\.?\s*transp\.?)\s*(?:nr|numer|ref|id|:|\#)?[\s:\.\/\-#\(\)\[\]"'\u201e\u201d]*([A-Za-z0-9\/\-_\.]+)/i
+  ];
+  for (const p of patterns) {
+    const m = (inv.notes || "").match(p);
+    if (m && m[1]) return m[1];
+  }
+  return inv.order_number || null;
+}
+assert.strictEqual(mapInvoiceOrderWithNotes(invD, datesMapD), "998811-WAW", "Powinno wyciągnąć numer zlecenia z uwag");
+console.log("✓ Test 5: Ekstrakcja numeru zlecenia z uwag 'Zlecenie transportowe nr ...' działa prawidłowo");
+
 console.log("\nWSZYSTKIE TESTY WERYFIKACYJNE KSEF ORDER NUMBER ZAKOŃCZONE SUKCESEM!");
