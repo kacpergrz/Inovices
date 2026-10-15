@@ -2373,18 +2373,20 @@ async function renderPdfPreview(signedUrl, renderId) {
     return;
   }
 
-  // Obliczenie szerokości kontenera z uwzględnieniem RWD (ekran telefonu vs desktop)
+  // Obliczenie szerokości kontenera z uwzględnieniem RWD oraz rezerwacji paska przewijania przy wielu stronach
+  const scrollbarReserve = totalPages > 1 ? 18 : 0;
   const containerWidth = (orderPreviewPdfPages && orderPreviewPdfPages.clientWidth > 50)
     ? orderPreviewPdfPages.clientWidth
     : (typeof window !== "undefined" && window.innerWidth ? Math.min(window.innerWidth - 32, 860) : 800);
-  const availableWidth = Math.max(containerWidth - 32, 260);
-  const targetWidth = Math.min(availableWidth, 860);
+  const horizontalPadding = (typeof window !== "undefined" && window.innerWidth <= 720) ? 16 : 32;
+  const maxAllowedWidth = Math.max(containerWidth - horizontalPadding - scrollbarReserve, 260);
+  const targetWidth = Math.min(maxAllowedWidth, 860);
   const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
 
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     if (currentPreviewRenderId !== renderId) return;
 
-    if (orderPreviewLoading && totalPages > 1) {
+    if (orderPreviewLoading && totalPages > 1 && pageNum > 1) {
       orderPreviewLoading.textContent = `⏳ Renderowanie stron (${pageNum}/${totalPages})...`;
       orderPreviewLoading.classList.remove("hidden");
     }
@@ -2397,8 +2399,12 @@ async function renderPdfPreview(signedUrl, renderId) {
     const renderScale = cssScale * dpr;
     const viewport = page.getViewport({ scale: renderScale });
 
+    const displayCssWidth = Math.round(viewport.width / dpr);
+
     const pageWrapper = document.createElement("div");
     pageWrapper.className = "pdf-page-wrapper";
+    pageWrapper.style.width = `${displayCssWidth}px`;
+    pageWrapper.style.maxWidth = "100%";
 
     if (totalPages > 1) {
       const pageHeader = document.createElement("div");
@@ -2412,12 +2418,12 @@ async function renderPdfPreview(signedUrl, renderId) {
 
     const canvas = document.createElement("canvas");
     canvas.className = "pdf-page-canvas";
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
-    canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    canvas.style.width = "100%";
     canvas.style.maxWidth = "100%";
     canvas.style.height = "auto";
+    canvas.style.aspectRatio = `${canvas.width} / ${canvas.height}`;
 
     const ctx = canvas.getContext("2d");
     if (ctx) {
@@ -2438,8 +2444,8 @@ async function renderPdfPreview(signedUrl, renderId) {
     await page.render(renderContext).promise;
     if (currentPreviewRenderId !== renderId) return;
 
-    // Po wyrenderowaniu pierwszej strony ukryj loader dla jednolitego odbioru
-    if (pageNum === 1 && totalPages === 1 && orderPreviewLoading) {
+    // Po wyrenderowaniu pierwszej strony ukryj loader, aby zwolnić pełną przestrzeń
+    if (pageNum === 1 && orderPreviewLoading) {
       orderPreviewLoading.classList.add("hidden");
     }
   }
@@ -2960,7 +2966,7 @@ function handlePdfPreviewResize() {
   if (!currentPdfPreviewData || !orderPreviewPdfPages || orderPreviewPdfPages.classList.contains("hidden")) return;
 
   const curWidth = orderPreviewPdfPages.clientWidth;
-  if (Math.abs(curWidth - lastPreviewContainerWidth) < 60) return;
+  if (Math.abs(curWidth - lastPreviewContainerWidth) < 25) return;
   lastPreviewContainerWidth = curWidth;
 
   clearTimeout(pdfResizeTimeout);

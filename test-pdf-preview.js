@@ -82,7 +82,20 @@ assert.strictEqual(desktopSim.displayCssWidth, 860, "Szerokość CSS wynosi dok�
 // Scenariusz C: Dokument w orientacji poziomej (landscape: 841.89 pt) na telefonie
 const landscapeMobile = calculatePageDimensions({ containerWidth: 360, pageWidth: 841.89, dpr: 2.0 });
 assert(landscapeMobile.displayCssWidth <= 360, "Strona pozioma automatycznie mieści się w pionowym ekranie telefonu");
-console.log("✓ Test 4: Algorytm skalowania stron PDF (RWD i HiDPI) działa optymalnie");
+
+// Scenariusz D: Dokument wielostronicowy - rezerwacja scrollbara zapobiega obcinaniu krawędzi stron
+function calculateMultiPageDimensions({ containerWidth, pageWidth, totalPages, isMobile = false }) {
+  const scrollbarReserve = totalPages > 1 ? 18 : 0;
+  const paddingX = isMobile ? 16 : 32;
+  const maxAllowedWidth = Math.max(containerWidth - paddingX - scrollbarReserve, 260);
+  const targetWidth = Math.min(maxAllowedWidth, 860);
+  return { targetWidth, scrollbarReserve, maxAllowedWidth };
+}
+
+const multiPageSim = calculateMultiPageDimensions({ containerWidth: 360, pageWidth: 595.28, totalPages: 3, isMobile: true });
+assert.strictEqual(multiPageSim.scrollbarReserve, 18, "Dla dokumentu >1 strony musi być zarezerwowany bufor paska przewijania 18px");
+assert(multiPageSim.targetWidth <= (360 - 16 - 18), "Szerokość strony po uwzględnieniu paska i paddingu nie przekracza dostępnej przestrzeni");
+console.log("✓ Test 4: Algorytm skalowania stron PDF (RWD, HiDPI i obsługa wielostronicowości) działa optymalnie");
 
 // =========================================================================
 // 5. Testy jednostkowe symulacji cyklu życia podglądu i anulowania
