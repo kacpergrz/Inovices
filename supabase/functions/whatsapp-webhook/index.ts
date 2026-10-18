@@ -1875,12 +1875,13 @@ if (
       let colCar = headers.indexOf("numer samochodu");
       if (colCar === -1) {
         colCar = headers.findIndex((h: string) =>
-          h.includes("samochod") ||
+          (h.includes("samochod") ||
           h.includes("samochód") ||
           h.includes("pojazd") ||
           h.includes("rejestr") ||
           h.includes("rej") ||
-          h.includes("auto")
+          h.includes("auto")) &&
+          !h.includes("kart")
         );
       }
       const colDate = headers.indexOf("data");

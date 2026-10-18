@@ -148,3 +148,44 @@ assert.strictEqual(expectedProfit, 6500, "Wynik firmy (25000 - 18500) wynosi 650
 console.log("✓ Test 7: Obliczanie wyniku netto firmy poprawne");
 
 console.log("\nWSZYSTKIE TESTY ZAKOŃCZONE SUKCESEM!");
+
+// E. Parsowanie raportów E100
+global.window = {
+  supabase: {
+    createClient: () => ({
+      auth: {
+        onAuthStateChange: () => {},
+        getSession: async () => ({ data: { session: null } })
+      }
+    })
+  }
+};
+
+global.document = {
+  getElementById: () => ({
+    addEventListener: () => {},
+    classList: { add: () => {}, remove: () => {}, toggle: () => {} }
+  }),
+  querySelectorAll: () => ([]),
+  addEventListener: () => {}
+};
+
+const appForTest = require("./app.js");
+
+const mockHeadersRow = ["Data", "Usługa", "Kraj", "Ilość", "Kwota", "Waluta", "Numer samochodu", "Numer karty"];
+const resultHeaders = appForTest.detectE100Headers([[], [], mockHeadersRow, ["01.10.2026", "ON", "PL", 10, 100, "PLN", "DW12345", "7005432100000000"]]);
+
+assert.strictEqual(resultHeaders.colCar, 6, "Detekcja kolumny pojazdu powinna zignorować kolumnę 'Numer karty' i wskazać 'Numer samochodu'");
+assert.strictEqual(resultHeaders.colCard, 7, "Detekcja powinna znaleźć kolumnę z kartą");
+
+assert.strictEqual(appForTest.parseE100DateToMonth("01.09.2026"), "2026-09", "Format DD.MM.YYYY");
+assert.strictEqual(appForTest.parseE100DateToMonth("2026-11-20"), "2026-11", "Format YYYY-MM-DD");
+
+const targetFromTransactions = appForTest.detectE100TargetMonth([
+  { date: "30.08.2026" },
+  { date: "01.09.2026" },
+  { date: "05.09.2026" }
+]);
+assert.strictEqual(targetFromTransactions, "2026-09", "Powinien wziąć najczęściej występujący miesiąc (09)");
+
+console.log("✓ Test 8: Parsowanie E100 chronione przed zjawiskiem karty flotowej poprawne");

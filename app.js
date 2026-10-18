@@ -3312,6 +3312,153 @@ const btnRevertE100 = document.getElementById("btn-revert-e100");
 const e100HistorySummary = document.getElementById("e100-history-summary");
 const e100HistoryTbody = document.getElementById("e100-history-tbody");
 
+// Precyzyjne wykrywanie kolumn w pliku Excel raportu E100 (rozróżnia numer rejestracyjny od numeru karty)
+function detectE100Headers(rows) {
+  let headerRowIndex = -1;
+  let colCar = -1, colCard = -1, colDate = -1, colService = -1, colCountry = -1, colAmount = -1, colCurrency = -1, colQty = -1;
+
+  for (let r = 0; r < Math.min(rows.length, 25); r++) {
+    const row = rows[r] || [];
+    let foundCar = -1;
+    let foundCard = -1;
+    let foundDate = -1;
+    let foundService = -1;
+    let foundCountry = -1;
+    let foundAmount = -1;
+    let foundCurrency = -1;
+    let foundQty = -1;
+
+    for (let c = 0; c < row.length; c++) {
+      const val = String(row[c] || "").toLowerCase().trim();
+      if (!val) continue;
+
+      if (val.includes("numer karty") || val.includes("nr karty") || (val.includes("karty") && !val.includes("samochod"))) {
+        foundCard = c;
+      }
+
+      // Wyszukiwanie kolumny pojazdu / rejestracji - wykluczamy słowo karta / karty
+      if (
+        (val.includes("samochod") || val.includes("samochód") || val.includes("pojazd") || val.includes("rejestr") || val.includes("rej") || val.includes("auto")) &&
+        !val.includes("karta") && !val.includes("karty")
+      ) {
+        if (val.includes("numer samochodu") || val.includes("nr samochodu") || val.includes("numer rej") || val.includes("nr rej")) {
+          foundCar = c;
+        } else if (foundCar === -1) {
+          foundCar = c;
+        }
+      }
+
+      if (val.includes("data")) foundDate = c;
+      if (val.includes("usługa") || val.includes("usluga") || val.includes("towar") || val.includes("artykuł") || val.includes("artykul")) foundService = c;
+      if (val.includes("kraj") || val.includes("państwo") || val.includes("panstwo")) foundCountry = c;
+      if (val.includes("kwota") || val.includes("brutto") || val.includes("wartość") || val.includes("wartosc")) foundAmount = c;
+      if (val.includes("waluta")) foundCurrency = c;
+      if (val.includes("ilość") || val.includes("ilosc") || val.includes("litry")) foundQty = c;
+    }
+
+    if (foundDate !== -1 && foundAmount !== -1) {
+      headerRowIndex = r;
+      colCar = foundCar;
+      colCard = foundCard;
+      colDate = foundDate;
+      colService = foundService;
+      colCountry = foundCountry;
+      colAmount = foundAmount;
+      colCurrency = foundCurrency;
+      colQty = foundQty;
+      break;
+    }
+  }
+
+  // Fallback: jeśli nie znaleziono kolumny samochodu, a istnieje kolumna karty
+  if (colCar === -1 && colCard !== -1) {
+    colCar = colCard;
+  }
+
+  return {
+    headerRowIndex,
+    colCar,
+    colCard,
+    colDate,
+    colService,
+    colCountry,
+    colAmount,
+    colCurrency,
+    colQty
+  };
+}
+
+// Konwertuje datę transakcji z E100 (DD.MM.YYYY lub YYYY-MM-DD) na format YYYY-MM
+function parseE100DateToMonth(dateStr) {
+  const s = String(dateStr || "").trim();
+  if (!s) return null;
+
+  if (s.includes(".")) {
+    const parts = s.split(".");
+    if (parts.length >= 3) {
+      const [d, m, y] = parts;
+      const fullY = y.length === 2 ? `20${y}` : (y.length === 4 ? y : y.padStart(4, "20"));
+      const monthNum = m.padStart(2, "0");
+      if (/^\d{4}$/.test(fullY) && /^(0[1-9]|1[0-2])$/.test(monthNum)) {
+        return `${fullY}-${monthNum}`;
+      }
+    }
+  }
+
+  if (s.includes("-")) {
+    const parts = s.split("-");
+    if (parts.length >= 2 && parts[0].length === 4) {
+      const fullY = parts[0];
+      const monthNum = parts[1].padStart(2, "0");
+      if (/^\d{4}$/.test(fullY) && /^(0[1-9]|1[0-2])$/.test(monthNum)) {
+        return `${fullY}-${monthNum}`;
+      }
+    }
+    if (parts.length >= 3 && parts[2].length === 4) {
+      const [d, m, y] = parts;
+      const monthNum = m.padStart(2, "0");
+      if (/^\d{4}$/.test(y) && /^(0[1-9]|1[0-2])$/.test(monthNum)) {
+        return `${y}-${monthNum}`;
+      }
+    }
+  }
+
+  return null;
+}
+
+// Automatycznie wykrywa właściwy miesiąc docelowy (YYYY-MM) na podstawie dat w pliku
+function detectE100TargetMonth(transactions, reportPeriod) {
+  if (reportPeriod) {
+    const matches = Array.from(String(reportPeriod).matchAll(/\b(\d{1,2})[./](\d{1,2})[./](\d{2,4})\b/g));
+    if (matches.length > 0) {
+      const lastMatch = matches[matches.length - 1];
+      const m = lastMatch[2].padStart(2, "0");
+      let y = lastMatch[3];
+      if (y.length === 2) y = `20${y}`;
+      if (/^\d{4}$/.test(y) && /^(0[1-9]|1[0-2])$/.test(m)) {
+        return `${y}-${m}`;
+      }
+    }
+  }
+
+  if (Array.isArray(transactions) && transactions.length > 0) {
+    const counts = {};
+    for (const t of transactions) {
+      const ym = parseE100DateToMonth(t?.date);
+      if (ym) {
+        counts[ym] = (counts[ym] || 0) + 1;
+      }
+    }
+    const entries = Object.entries(counts);
+    if (entries.length > 0) {
+      entries.sort((a, b) => b[1] - a[1]);
+      return entries[0][0];
+    }
+  }
+
+  return null;
+}
+
 if (e100FileInput) {
   e100FileInput.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
@@ -3329,56 +3476,38 @@ if (e100FileInput) {
         const worksheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        const cellB2 = worksheet["B2"] ? String(worksheet["B2"].v || "").trim() : "";
+        const cellB2 = worksheet["B2"] ? String(worksheet["B2"].v || worksheet["B2"].w || "").trim() : "";
         let reportPeriod = "";
         if (cellB2.toLowerCase().includes("okres")) {
           reportPeriod = cellB2.replace(/^.*okres[:\s]*/i, "").trim();
         }
         e100ReportPeriod = reportPeriod;
 
-        let colCar = -1, colDate = -1, colService = -1, colCountry = -1, colAmount = -1, colCurrency = -1, colQty = -1;
-        let headerRowIndex = -1;
-
-        for (let r = 0; r < Math.min(rows.length, 25); r++) {
-          const row = rows[r] || [];
-          for (let c = 0; c < row.length; c++) {
-            const val = String(row[c] || "").toLowerCase().trim();
-            if (val.includes("samochod") || val.includes("pojazd") || val.includes("numer karty")) colCar = c;
-            if (val.includes("data")) colDate = c;
-            if (val.includes("usługa") || val.includes("usluga") || val.includes("towar")) colService = c;
-            if (val.includes("kraj") || val.includes("państwo")) colCountry = c;
-            if (val.includes("kwota") || val.includes("brutto") || val.includes("wartość")) colAmount = c;
-            if (val.includes("waluta")) colCurrency = c;
-            if (val.includes("ilość") || val.includes("ilosc") || val.includes("litry")) colQty = c;
-          }
-          if (colDate !== -1 && colAmount !== -1) {
-            headerRowIndex = r;
-            break;
-          }
-        }
-
-        if (headerRowIndex === -1) {
+        const headersInfo = detectE100Headers(rows);
+        if (headersInfo.headerRowIndex === -1 || headersInfo.colDate === -1 || headersInfo.colAmount === -1) {
           throw new Error("Nie udało się rozpoznać nagłówków kolumn raportu E100 w pliku Excel.");
         }
 
+        const { colCar, colDate, colService, colCountry, colAmount, colCurrency, colQty } = headersInfo;
         const transactions = [];
         let detectedPlate = "";
 
-        for (let r = headerRowIndex + 1; r < rows.length; r++) {
+        for (let r = headersInfo.headerRowIndex + 1; r < rows.length; r++) {
           const row = rows[r];
           if (!row || !row[colDate] || row[colAmount] === undefined) continue;
 
           if (colCar !== -1 && row[colCar] && !detectedPlate) {
-            detectedPlate = String(row[colCar]).trim();
+            const val = String(row[colCar]).trim();
+            if (val) detectedPlate = val;
           }
 
           transactions.push({
             date: String(row[colDate] || "").trim(),
-            service: String(row[colService] || "").trim(),
-            country: String(row[colCountry] || "").trim().toUpperCase(),
+            service: colService !== -1 ? String(row[colService] || "").trim() : "ON",
+            country: colCountry !== -1 ? String(row[colCountry] || "").trim().toUpperCase() : "PL",
             gross: Number(String(row[colAmount]).replace(",", ".")) || 0,
-            currency: String(row[colCurrency] || "PLN").trim().toUpperCase(),
-            qty: Number(String(row[colQty] || 0).replace(",", ".")) || 0,
+            currency: colCurrency !== -1 ? String(row[colCurrency] || "PLN").trim().toUpperCase() : "PLN",
+            qty: colQty !== -1 ? Number(String(row[colQty] || 0).replace(",", ".")) || 0 : 0,
             report_period: reportPeriod || null,
           });
         }
@@ -3391,6 +3520,19 @@ if (e100FileInput) {
         e100DetectedPlate = detectedPlate;
 
         if (e100PreviewCount) e100PreviewCount.textContent = transactions.length;
+
+        // Automatyczne ustawienie miesiąca docelowego z pliku
+        const detectedTargetMonth = detectE100TargetMonth(transactions, reportPeriod);
+        if (detectedTargetMonth && e100TargetMonth) {
+          const hasOption = Array.from(e100TargetMonth.options).some((o) => o.value === detectedTargetMonth);
+          if (!hasOption) {
+            const opt = document.createElement("option");
+            opt.value = detectedTargetMonth;
+            opt.textContent = detectedTargetMonth;
+            e100TargetMonth.insertBefore(opt, e100TargetMonth.firstChild);
+          }
+          e100TargetMonth.value = detectedTargetMonth;
+        }
 
         if (e100TargetVehicle) {
           const cleanPlate = detectedPlate.replace(/[\s-]/g, "").toLowerCase();
@@ -3419,7 +3561,11 @@ if (e100FileInput) {
           `).join("");
         }
 
-        const totalGrossPreview = transactions.reduce((s, t) => s + t.gross, 0);
+        const matchedVeh = allVehicles.find((v) => String(v.id) === e100TargetVehicle?.value);
+        const vehicleDisplay = matchedVeh
+          ? `${escapeHtml(matchedVeh.name.toUpperCase())} (${escapeHtml(matchedVeh.plate)})`
+          : escapeHtml(detectedPlate || "Brak w arkuszu");
+
         if (e100PreviewSummary) {
           e100PreviewSummary.innerHTML = `
             <div class="result-card">
@@ -3428,11 +3574,15 @@ if (e100FileInput) {
             </div>
             <div class="result-card">
               <div class="result-label">Wykryty pojazd</div>
-              <div class="result-value" style="font-size:1.1rem;">${escapeHtml(detectedPlate || "Brak w arkuszu")}</div>
+              <div class="result-value" style="font-size:1.1rem;">${vehicleDisplay}</div>
+            </div>
+            <div class="result-card">
+              <div class="result-label">Miesiąc docelowy</div>
+              <div class="result-value" style="font-size:1.1rem; color:#2563eb;">${escapeHtml(e100TargetMonth?.value || detectedTargetMonth || "-")}</div>
             </div>
             <div class="result-card">
               <div class="result-label">Okres raportu</div>
-              <div class="result-value" style="font-size:1rem;">${escapeHtml(reportPeriod || "Wg dat")}</div>
+              <div class="result-value" style="font-size:1rem;">${escapeHtml(reportPeriod || "Wg dat transakcji")}</div>
             </div>
           `;
         }
@@ -3498,6 +3648,11 @@ if (btnSaveE100Import) {
       let tollNetPln = 0;
       const detailRows = [];
 
+      const matchedVeh = alloc.vehicle_id ? allVehicles.find((v) => v.id === alloc.vehicle_id) : null;
+      const plateLabel = matchedVeh
+        ? `${matchedVeh.name.toUpperCase()} (${matchedVeh.plate})`
+        : (e100DetectedPlate || "Pojazd");
+
       for (const t of e100ParsedTransactions) {
         if (filterFromDate && t.date.includes(".")) {
           const parts = t.date.split(".");
@@ -3526,7 +3681,7 @@ if (btnSaveE100Import) {
 
         detailRows.push({
           vehicle_id: alloc.vehicle_id,
-          truck_plate: e100DetectedPlate || "Pojazd",
+          truck_plate: plateLabel,
           transaction_date: t.date,
           service: t.service,
           country: t.country,
@@ -3538,10 +3693,6 @@ if (btnSaveE100Import) {
           report_period: t.report_period,
         });
       }
-
-      const plateLabel = alloc.vehicle_id
-        ? (allVehicles.find((v) => v.id === alloc.vehicle_id)?.plate || e100DetectedPlate)
-        : e100DetectedPlate;
 
       if (fuelNetPln > 0) {
         const { error: fuelErr } = await supabaseClient.from("expenses").insert({
@@ -3569,16 +3720,25 @@ if (btnSaveE100Import) {
         if (tollErr) throw tollErr;
       }
 
+      let detailInsertError = null;
       if (detailRows.length > 0) {
         const { error: detErr } = await supabaseClient.from("e100_transactions").insert(detailRows);
         if (detErr) {
-          console.warn("Zapis bez report_period:", detErr.message);
+          console.warn("Zapis z report_period nie powiódł się, próba fallback:", detErr.message);
           const fallback = detailRows.map(({ report_period, ...rest }) => rest);
-          await supabaseClient.from("e100_transactions").insert(fallback);
+          const { error: fallbackErr } = await supabaseClient.from("e100_transactions").insert(fallback);
+          if (fallbackErr) {
+            console.error("Błąd zapisu e100_transactions (fallback):", fallbackErr.message);
+            detailInsertError = fallbackErr.message;
+          }
         }
       }
 
-      alert(`✅ Pomyślnie zaimportowano raport E100 do miesiąca ${targetMonth}!\nDodano: Paliwo ${(fuelNetPln).toFixed(2)} PLN, Myto ${(tollNetPln).toFixed(2)} PLN.\nŁącznie pozycji: ${detailRows.length}.`);
+      let successMsg = `✅ Pomyślnie zaimportowano raport E100 do miesiąca ${targetMonth}!\nDodano: Paliwo ${(fuelNetPln).toFixed(2)} PLN, Myto ${(tollNetPln).toFixed(2)} PLN.\nŁącznie pozycji: ${detailRows.length}.`;
+      if (detailInsertError) {
+        successMsg += `\n\n⚠️ Uwaga: Podsumowanie kosztów zapisano w wydatkach, ale szczegółowe pozycje transakcji nie zapisały się w tabeli e100_transactions:\n${detailInsertError}\n(Sprawdź uprawnienia RLS tabeli w Supabase dla zalogowanego użytkownika).`;
+      }
+      alert(successMsg);
 
       e100ParsedTransactions = [];
       if (e100FileDetails) e100FileDetails.classList.add("hidden");
@@ -4264,6 +4424,9 @@ if (typeof module !== "undefined" && module.exports) {
     invoiceBelongsToMonth,
     generateMonthOptions,
     renderVehicleBadge,
-    getInvoiceExchangeRate
+    getInvoiceExchangeRate,
+    detectE100Headers,
+    parseE100DateToMonth,
+    detectE100TargetMonth
   };
 }
