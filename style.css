@@ -439,6 +439,14 @@ body {
   z-index: 1000;
 }
 
+#confirm-modal {
+  z-index: 1200;
+}
+
+#confirm-modal .modal-box {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
 .modal-overlay.hidden {
   display: none;
 }

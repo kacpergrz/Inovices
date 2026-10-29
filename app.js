@@ -929,6 +929,14 @@ document.getElementById("confirm-modal-yes").addEventListener("click", async () 
 
 document.getElementById("confirm-modal-cancel").addEventListener("click", closeConfirmModal);
 
+if (confirmModal) {
+  confirmModal.addEventListener("click", (e) => {
+    if (e.target === confirmModal) {
+      closeConfirmModal();
+    }
+  });
+}
+
 // =========================================================================
 // AKCJE W WIERSZACH TABELI FAKTUR
 // =========================================================================
@@ -2988,6 +2996,10 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (confirmModal && !confirmModal.classList.contains("hidden")) {
+        closeConfirmModal();
+        return;
+      }
       closeOrderPreviewModal();
     }
   });
