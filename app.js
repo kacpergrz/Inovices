@@ -3047,6 +3047,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 // =========================================================================
 let allExpenses = [];
 let currentExpenseVehicleModalId = null;
+let currentEditExpenseId = null;
 
 const expensesStatusEl = document.getElementById("expenses-status");
 const expensesTbodyEl = document.getElementById("expenses-tbody");
@@ -3057,6 +3058,8 @@ const btnOpenAddExpense = document.getElementById("btn-open-add-expense");
 
 const expenseFormModal = document.getElementById("expense-form-modal");
 const expenseForm = document.getElementById("expense-form");
+const expenseFormTitle = document.getElementById("expense-form-title");
+const btnSaveExpense = document.getElementById("btn-save-expense");
 const btnCancelExpenseForm = document.getElementById("btn-cancel-expense-form");
 
 const expenseVehicleModal = document.getElementById("expense-vehicle-modal");
@@ -3171,6 +3174,7 @@ function renderExpensesTable() {
       <td data-label="Data wpisu">${dateStr}</td>
       <td data-label="Akcje">
         <div class="row-actions">
+          <button class="btn btn-secondary btn-small" data-expense-action="edit" data-id="${e.id}">Edytuj</button>
           <button class="btn btn-secondary btn-small" data-expense-action="assign" data-id="${e.id}">Pojazd</button>
           <button class="btn btn-secondary btn-small" data-expense-action="delete" data-id="${e.id}" style="color:var(--color-danger)">Usuń</button>
         </div>
@@ -3193,7 +3197,9 @@ if (expensesTbodyEl) {
     const expense = allExpenses.find((e) => String(e.id) === String(id));
     if (!expense) return;
 
-    if (action === "assign") {
+    if (action === "edit") {
+      openExpenseForm(expense);
+    } else if (action === "assign") {
       openExpenseVehicleModal(expense);
     } else if (action === "delete") {
       openConfirmModal(
@@ -3214,22 +3220,104 @@ if (expensesTbodyEl) {
   });
 }
 
-function openExpenseForm() {
+function openExpenseForm(expense = null) {
   if (!expenseFormModal) return;
-  expenseForm.reset();
-  document.getElementById("err-exp-amount").textContent = "";
-  document.getElementById("err-exp-month").textContent = "";
-  const curMonth = expFilterMonthEl?.value || new Date().toISOString().slice(0, 7);
-  document.getElementById("exp-month").value = curMonth;
+  currentEditExpenseId = expense ? expense.id : null;
+
+  if (expenseFormTitle) {
+    expenseFormTitle.textContent = expense ? "Edytuj wydatek / koszt" : "Dodaj wydatek / koszt";
+  }
+  if (btnSaveExpense) {
+    btnSaveExpense.textContent = expense ? "Zapisz zmiany" : "Zapisz koszt";
+  }
+
+  const errAmt = document.getElementById("err-exp-amount");
+  const errM = document.getElementById("err-exp-month");
+  if (errAmt) errAmt.textContent = "";
+  if (errM) errM.textContent = "";
+
+  const expIdEl = document.getElementById("exp-id");
+  const expCatEl = document.getElementById("exp-category");
+  const expAmtEl = document.getElementById("exp-amount");
+  const expMonthEl = document.getElementById("exp-month");
+  const expVehEl = document.getElementById("exp-vehicle");
+  const expDescEl = document.getElementById("exp-description");
+
+  if (expense) {
+    if (expIdEl) expIdEl.value = expense.id;
+    if (expCatEl) expCatEl.value = expense.category || "inne";
+    if (expAmtEl) expAmtEl.value = expense.amount != null ? expense.amount : "";
+    if (expMonthEl) expMonthEl.value = expense.expense_month || "";
+    if (expDescEl) expDescEl.value = expense.description || "";
+    if (expVehEl) {
+      if (expense.allocation_type === "shared") {
+        expVehEl.value = "shared";
+      } else if (expense.allocation_type === "vehicle" && expense.vehicle_id) {
+        expVehEl.value = String(expense.vehicle_id);
+      } else {
+        expVehEl.value = "unassigned";
+      }
+    }
+  } else {
+    expenseForm.reset();
+    if (expIdEl) expIdEl.value = "";
+    const curMonth = expFilterMonthEl?.value || new Date().toISOString().slice(0, 7);
+    if (expMonthEl) expMonthEl.value = curMonth;
+    if (expVehEl) expVehEl.value = "unassigned";
+  }
+
   expenseFormModal.classList.remove("hidden");
 }
 
 function closeExpenseForm() {
   if (expenseFormModal) expenseFormModal.classList.add("hidden");
+  currentEditExpenseId = null;
 }
 
-if (btnOpenAddExpense) btnOpenAddExpense.addEventListener("click", openExpenseForm);
+if (btnOpenAddExpense) {
+  btnOpenAddExpense.addEventListener("click", () => {
+    openExpenseForm(null);
+  });
+}
 if (btnCancelExpenseForm) btnCancelExpenseForm.addEventListener("click", closeExpenseForm);
+
+if (expenseFormModal) {
+  expenseFormModal.addEventListener("click", (e) => {
+    if (e.target === expenseFormModal) {
+      closeExpenseForm();
+    }
+  });
+}
+
+async function addExpense(expenseData) {
+  showExpensesStatus("Zapisywanie wydatku...");
+  try {
+    const { error } = await supabaseClient.from("expenses").insert(expenseData);
+    if (error) throw error;
+    clearExpensesStatus();
+    await fetchExpenses();
+    return true;
+  } catch (err) {
+    console.error(err);
+    showExpensesStatus("Nie udało się zapisać wydatku: " + err.message, true);
+    return false;
+  }
+}
+
+async function updateExpense(id, expenseData) {
+  showExpensesStatus("Zapisywanie zmian w wydatku...");
+  try {
+    const { error } = await supabaseClient.from("expenses").update(expenseData).eq("id", id);
+    if (error) throw error;
+    clearExpensesStatus();
+    await fetchExpenses();
+    return true;
+  } catch (err) {
+    console.error(err);
+    showExpensesStatus("Nie udało się zaktualizować wydatku: " + err.message, true);
+    return false;
+  }
+}
 
 if (expenseForm) {
   expenseForm.addEventListener("submit", async (e) => {
@@ -3243,41 +3331,41 @@ if (expenseForm) {
     let valid = true;
     const errAmt = document.getElementById("err-exp-amount");
     const errM = document.getElementById("err-exp-month");
-    errAmt.textContent = "";
-    errM.textContent = "";
+    if (errAmt) errAmt.textContent = "";
+    if (errM) errM.textContent = "";
 
     const amount = Number(amountRaw);
     if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
-      errAmt.textContent = "Podaj poprawną kwotę większą od 0.";
+      if (errAmt) errAmt.textContent = "Podaj poprawną kwotę większą od 0.";
       valid = false;
     }
 
     if (!/^\d{4}-\d{2}$/.test(month)) {
-      errM.textContent = "Format miesiąca: RRRR-MM (np. 2026-09).";
+      if (errM) errM.textContent = "Format miesiąca: RRRR-MM (np. 2026-09).";
       valid = false;
     }
 
     if (!valid) return;
 
     const alloc = parseAllocation(vehicleVal);
-    showExpensesStatus("Zapisywanie wydatku...");
+    const payload = {
+      category,
+      amount: Math.round(amount * 100) / 100,
+      expense_month: month,
+      description: description || null,
+      vehicle_id: alloc.vehicle_id,
+      allocation_type: alloc.allocation_type,
+    };
 
-    try {
-      const { error } = await supabaseClient.from("expenses").insert({
-        category,
-        amount: Math.round(amount * 100) / 100,
-        expense_month: month,
-        description: description || null,
-        vehicle_id: alloc.vehicle_id,
-        allocation_type: alloc.allocation_type,
-      });
+    let success = false;
+    if (currentEditExpenseId) {
+      success = await updateExpense(currentEditExpenseId, payload);
+    } else {
+      success = await addExpense(payload);
+    }
 
-      if (error) throw error;
+    if (success) {
       closeExpenseForm();
-      await fetchExpenses();
-    } catch (err) {
-      console.error(err);
-      showExpensesStatus("Nie udało się zapisać wydatku: " + err.message, true);
     }
   });
 }
@@ -4477,6 +4565,10 @@ if (typeof module !== "undefined" && module.exports) {
     getInvoiceExchangeRate,
     detectE100Headers,
     parseE100DateToMonth,
-    detectE100TargetMonth
+    detectE100TargetMonth,
+    addExpense,
+    updateExpense,
+    openExpenseForm,
+    closeExpenseForm
   };
 }
