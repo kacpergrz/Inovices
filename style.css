@@ -262,7 +262,7 @@ body {
 }
 
 .filter-box-sort {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .toolbar-actions {
@@ -798,12 +798,12 @@ body {
   }
   .filters-grid {
     display: flex;
-    flex: 3;
+    flex: 4;
     gap: 10px;
   }
   .filter-box {
     flex: 1;
-    min-width: 140px;
+    min-width: 120px;
   }
   .filter-box-sort {
     grid-column: auto;

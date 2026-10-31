@@ -23,6 +23,7 @@ let pendingConfirmAction = null;
 // =========================================================================
 const globalStatusEl = document.getElementById("global-status");
 const searchInputEl = document.getElementById("search-input");
+const filterMonthEl = document.getElementById("filter-month");
 const filterStatusEl = document.getElementById("filter-status");
 const filterVehicleEl = document.getElementById("filter-vehicle");
 const sortSelectEl = document.getElementById("sort-select");
@@ -356,6 +357,7 @@ async function fetchInvoices() {
     if (error) throw error;
 
     allInvoices = data || [];
+    updateInvoiceMonthFilter();
     applyFiltersAndRender();
     clearStatus();
   } catch (err) {
@@ -366,6 +368,7 @@ async function fetchInvoices() {
 
 function applyFiltersAndRender() {
   const term = searchInputEl.value.trim().toLowerCase();
+  const monthFilter = filterMonthEl ? filterMonthEl.value : "all";
   const statusFilter = filterStatusEl.value;
   const vehicleFilter = filterVehicleEl ? filterVehicleEl.value : "all";
   const sortMode = sortSelectEl.value;
@@ -378,6 +381,10 @@ function applyFiltersAndRender() {
       const nip = (inv.seller_nip || "").toLowerCase();
       return seller.includes(term) || nip.includes(term);
     });
+  }
+
+  if (monthFilter && monthFilter !== "all") {
+    list = list.filter((inv) => invoiceBelongsToMonth(inv, monthFilter));
   }
 
   if (statusFilter === "paid") {
@@ -712,6 +719,7 @@ function escapeHtml(str) {
 // OBSLUGA WYSZUKIWANIA, FILTROWANIA I SORTOWANIA (FAKTURY)
 // =========================================================================
 searchInputEl.addEventListener("input", applyFiltersAndRender);
+if (filterMonthEl) filterMonthEl.addEventListener("change", applyFiltersAndRender);
 filterStatusEl.addEventListener("change", applyFiltersAndRender);
 if (filterVehicleEl) filterVehicleEl.addEventListener("change", applyFiltersAndRender);
 sortSelectEl.addEventListener("change", applyFiltersAndRender);
@@ -1256,7 +1264,8 @@ function invoiceBelongsToMonth(invoice, month) {
   }
   if (!invoice.issue_date) return false;
   const { startOfMonth, endOfMonth } = getMonthRange(month);
-  return invoice.issue_date >= startOfMonth && invoice.issue_date <= endOfMonth;
+  const issueDateStr = String(invoice.issue_date).slice(0, 10);
+  return issueDateStr >= startOfMonth && issueDateStr <= endOfMonth;
 }
 
 // Wypelnia selecty pojazdow, kierowcow i miesiecy w zakladce Wyniki i Faktury.
@@ -1308,6 +1317,7 @@ async function loadVehiclesAndDrivers() {
 
     updateVehicleSelects();
     updateServiceMonthSelect();
+    updateInvoiceMonthFilter();
 
     if (allInvoices.length > 0) {
       applyFiltersAndRender();
@@ -1334,6 +1344,33 @@ async function loadVehiclesAndDrivers() {
   } catch (err) {
     console.error(err);
     showResultsError("Nie udało się wczytać listy pojazdów/kierowców — sprawdź połączenie.");
+  }
+}
+
+// Aktualizuje opcje w filtrze miesiecy na liscie faktur (#filter-month)
+function updateInvoiceMonthFilter() {
+  if (!filterMonthEl) return;
+  const currentVal = filterMonthEl.value || "all";
+
+  const monthsSet = new Set(generateMonthOptions());
+  if (Array.isArray(allInvoices)) {
+    for (const inv of allInvoices) {
+      const m = inv.service_month || (inv.issue_date ? String(inv.issue_date).slice(0, 7) : null);
+      if (m && /^\d{4}-\d{2}$/.test(m)) {
+        monthsSet.add(m);
+      }
+    }
+  }
+
+  const sortedMonths = Array.from(monthsSet).sort().reverse();
+  const optionsHtml = `<option value="all">Wszystkie miesiące</option>` +
+    sortedMonths.map((m) => `<option value="${m}">${m}</option>`).join("");
+
+  filterMonthEl.innerHTML = optionsHtml;
+  if (currentVal && (currentVal === "all" || sortedMonths.includes(currentVal))) {
+    filterMonthEl.value = currentVal;
+  } else {
+    filterMonthEl.value = "all";
   }
 }
 
@@ -4435,6 +4472,7 @@ if (typeof module !== "undefined" && module.exports) {
     getMonthInvoiceFilter,
     invoiceBelongsToMonth,
     generateMonthOptions,
+    updateInvoiceMonthFilter,
     renderVehicleBadge,
     getInvoiceExchangeRate,
     detectE100Headers,
